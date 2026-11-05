@@ -45,6 +45,32 @@ function PerspectiveToggle({ gameState }: { gameState: GameState }) {
   );
 }
 
+/**
+ * Seeds to replay this game. The board seed is public; the game and dice
+ * seeds arrive only once the game is over (they reveal every future roll).
+ */
+function SeedsInfo({ gameState }: { gameState: GameState }) {
+  const seeds = gameState.seeds;
+  if (!seeds) {
+    return null;
+  }
+  const parts = [
+    ["Board", seeds.board],
+    ["Dice", seeds.dice],
+    ["Game", seeds.game],
+  ].filter(([, value]) => value !== undefined && value !== null);
+  if (parts.length === 0) {
+    return null;
+  }
+  return (
+    <div className="seeds-info" title="Same seeds = same game (New game → Seeds)">
+      Seeds:{" "}
+      {parts.map(([label, value]) => `${label} ${value}`).join(" · ")}
+      {seeds.dice === undefined ? " · dice & game after the end" : ""}
+    </div>
+  );
+}
+
 function DrawerContent({ gameState }: { gameState: GameState }) {
   const playerSections = gameState.colors.map((color) => {
     const key = playerKey(gameState, color);
@@ -63,6 +89,7 @@ function DrawerContent({ gameState }: { gameState: GameState }) {
   return (
     <>
       <PerspectiveToggle gameState={gameState} />
+      <SeedsInfo gameState={gameState} />
       {playerSections}
       <div className="log">
         {gameState.action_records

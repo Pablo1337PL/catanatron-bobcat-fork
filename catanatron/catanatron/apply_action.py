@@ -269,9 +269,12 @@ def apply_roll(state: State, action: Action, action_record=None):
     key = player_key(state, action.color)
     state.player_state[f"{key}_HAS_ROLLED"] = True
 
-    dices = (
-        action_record.result if action_record is not None else roll_dice(state.random)
-    )
+    if action_record is not None:
+        dices = action_record.result
+    elif state.dice_seed is not None:
+        dices = seeded_roll(state.dice_seed, count_rolls(state))
+    else:
+        dices = roll_dice(state.random)
     number = dices[0] + dices[1]
     action = Action(action.color, action.action_type, dices)
 
@@ -542,6 +545,23 @@ def roll_dice(rng=None):
     """
     rng = rng if rng is not None else random
     return (rng.randint(1, 6), rng.randint(1, 6))
+
+
+def seeded_roll(dice_seed, roll_index):
+    """The ``roll_index``-th roll (counted from 0) of a game with ``dice_seed``.
+
+    Stateless: depends only on (seed, index), so the sequence is the same no
+    matter who draws other random numbers in between, and it survives
+    rebuilding the game from storage (the web server does that per request).
+    """
+    return roll_dice(random.Random(f"{dice_seed}:{roll_index}"))
+
+
+def count_rolls(state: State) -> int:
+    """Number of rolls so far in the game."""
+    return sum(
+        1 for r in state.action_records if r.action.action_type == ActionType.ROLL
+    )
 
 
 def yield_resources(board: Board, resource_freqdeck, number):

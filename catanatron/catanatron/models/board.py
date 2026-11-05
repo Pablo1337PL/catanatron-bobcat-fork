@@ -322,6 +322,36 @@ class Board:
         )
         return board
 
+    def fast_copy(self):
+        """Same result as :meth:`copy`, without pickle and deepcopy (~3x faster).
+
+        Copies explicitly what the engine mutates in place (the sets of the
+        road components); the caches are replaced, never mutated, by the
+        engine, so copying the dicts and their small values is enough.
+        """
+        board = Board.__new__(Board)
+        board.map = self.map  # immutable
+        board.buildings = self.buildings.copy()
+        board.roads = self.roads.copy()
+        connected_components = defaultdict(list)
+        for color, components in self.connected_components.items():
+            connected_components[color] = [set(c) for c in components]
+        board.connected_components = connected_components
+        board.board_buildable_ids = self.board_buildable_ids.copy()
+        board.road_lengths = self.road_lengths.copy()
+        board.road_color = self.road_color
+        board.road_length = self.road_length
+
+        board.robber_coordinate = self.robber_coordinate
+        board.buildable_subgraph = self.buildable_subgraph
+        board.buildable_edges_cache = {
+            k: list(v) for k, v in self.buildable_edges_cache.items()
+        }
+        board.player_port_resources_cache = {
+            k: set(v) for k, v in self.player_port_resources_cache.items()
+        }
+        return board
+
     # ===== Helper functions
     def get_node_color(self, node_id):
         # using try-except instead of .get for performance

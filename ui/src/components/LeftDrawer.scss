@@ -16,6 +16,13 @@ $dark-divider: rgb(0 0 0 / 80%);
     border-color: $dark-divider;
   }
 
+  .seeds-info {
+    padding: variables.$sm-gutter;
+    color: rgb(255 255 255 / 60%);
+    font-size: 0.75rem;
+    user-select: text;
+  }
+
   .log {
     overflow-y: auto;
     font-size: 0.8rem;

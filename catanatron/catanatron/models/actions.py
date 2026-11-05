@@ -31,9 +31,9 @@ from catanatron.models.enums import (
 )
 from catanatron.state import State
 from catanatron.state_functions import (
-    get_actual_victory_points,
     get_player_buildings,
     get_player_freqdeck,
+    get_visible_victory_points,
     player_can_afford_dev_card,
     player_can_play_dev,
     player_has_rolled,
@@ -212,7 +212,9 @@ def robber_possibilities(state, color) -> List[Action]:
 
     filtered_actions = list(
         filter(
-            lambda action: not _robber_action_blocks_low_vp_enemy(state, color, action),
+            lambda action: not _robber_action_blocks_protected_player(
+                state, color, action
+            ),
             actions,
         )
     )
@@ -249,7 +251,21 @@ def _robber_possibilities_without_friendly_robber(state, color) -> List[Action]:
     return actions
 
 
-def _robber_action_blocks_low_vp_enemy(state, color, action) -> bool:
+#: Friendly robber (1v1 rules): a player with at most this many *visible*
+#: victory points is protected.
+FRIENDLY_ROBBER_MAX_VP = 2
+
+
+def _robber_action_blocks_protected_player(state, color, action) -> bool:
+    """Whether a robber move lands on a tile next to a protected player.
+
+    1v1 friendly robber: the robber may not be placed on a tile adjacent to a
+    building of a player with at most ``FRIENDLY_ROBBER_MAX_VP`` visible victory
+    points. Visible points are buildings, longest road and largest army, without
+    victory point cards (nobody else can see those). The rule protects the
+    opponent *and* the player moving the robber. When no tile is allowed,
+    ``robber_possibilities`` falls back to every tile.
+    """
     coordinate, _ = action.value
     tile = state.board.map.land_tiles[coordinate]
     for node_id in tile.nodes.values():
@@ -257,14 +273,14 @@ def _robber_action_blocks_low_vp_enemy(state, color, action) -> bool:
         if building is None:
             continue
 
-        candidate_color = building[0]
-        if color == candidate_color:
-            continue
-
-        if get_actual_victory_points(state, candidate_color) < 3:
+        if get_visible_victory_points(state, building[0]) <= FRIENDLY_ROBBER_MAX_VP:
             return True
 
     return False
+
+
+# Upstream name, kept for code that imported it.
+_robber_action_blocks_low_vp_enemy = _robber_action_blocks_protected_player
 
 
 def initial_road_possibilities(state, color) -> List[Action]:

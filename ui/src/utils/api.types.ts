@@ -142,6 +142,11 @@ export type GameState = {
   edgeActions?: GameAction[];
   nodeActions?: GameAction[];
   state_index: number;
+  /**
+   * Seeds to replay this game. The board seed is public; the game and dice
+   * seeds reveal every future roll and draw, so they come once it is over.
+   */
+  seeds?: { board: number | null; game?: number; dice?: number | null };
 
   // Also present, from the state document itself.
   schema_version: number;
@@ -150,6 +155,7 @@ export type GameState = {
     vps_to_win: number;
     discard_limit: number;
     friendly_robber: boolean;
+    board_seed?: number | null;
   };
   num_turns: number;
   current_player_index: number;

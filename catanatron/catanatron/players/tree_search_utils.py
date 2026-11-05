@@ -43,77 +43,92 @@ def execute_deterministic(game, action):
     return [(copy, 1)]
 
 
+def _execute_outcome(game: Game, action: Action, result):
+    """Copy of ``game`` after ``action`` with its random outcome forced to ``result``.
+
+    The engine reads random outcomes (dice, drawn card, stolen resource) only
+    from ``action_record.result``; ``action.value`` is ignored for them. Passing
+    the outcome in the record makes the branch deterministic and leaves the
+    game's random stream untouched.
+    """
+    option_game = game.copy()
+    option_game.execute(
+        action,
+        validate_action=False,
+        action_record=ActionRecord(action=action, result=result),
+    )
+    return option_game
+
+
+def roll_outcomes():
+    """[(dice, proba)] for the sums 2..12; production depends only on the sum."""
+    return [
+        ((roll // 2, math.ceil(roll / 2)), number_probability(roll))
+        for roll in range(2, 13)
+    ]
+
+
+def development_card_outcomes(game: Game, color):
+    """[(card, proba)] for a development card bought by ``color``.
+
+    Drawn from what is face down for the buyer: the bank's deck plus the
+    opponents' unplayed cards. Only cards actually left in the bank can be
+    drawn, so the others are skipped and the probabilities renormalized.
+    """
+    state = game.state
+    pool = {card: state.development_listdeck.count(card) for card in DEVELOPMENT_CARDS}
+    for enemy_color in get_enemy_colors(state.colors, color):
+        for card in DEVELOPMENT_CARDS:
+            pool[card] += get_dev_cards_in_hand(state, enemy_color, card)
+
+    feasible = [
+        card
+        for card in DEVELOPMENT_CARDS
+        if pool[card] > 0 and card in state.development_listdeck
+    ]
+    total = sum(pool[card] for card in feasible)
+    return [(card, pool[card] / total) for card in feasible]
+
+
+def steal_outcomes(game: Game, robbed_color):
+    """[(resource, proba)] stolen from ``robbed_color``: proportional to the hand."""
+    hand = get_player_freqdeck(game.state, robbed_color)
+    total = sum(hand)
+    return [
+        (resource, count / total)
+        for resource, count in zip(RESOURCES, hand)
+        if count > 0
+    ]
+
+
 def execute_spectrum(game: Game, action: Action):
     """Returns [(game_copy, proba), ...] tuples for result of given action.
     Result probas should add up to 1. Does not modify self"""
     if action.action_type in DETERMINISTIC_ACTIONS:
         return execute_deterministic(game, action)
     elif action.action_type == ActionType.BUY_DEVELOPMENT_CARD:
-        results = []
-
-        # Get the possible deck from the perspective of the current player
-        # by getting all face down cards
-        current_deck = game.state.development_listdeck.copy()
-        for color in get_enemy_colors(game.state.colors, action.color):
-            for card in DEVELOPMENT_CARDS:
-                number = get_dev_cards_in_hand(game.state, color, card)
-                current_deck += [card] * number
-
-        for card in set(current_deck):
-            option_action = Action(action.color, action.action_type, card)
-            option_game = game.copy()
-            try:
-                option_game.execute(option_action, validate_action=False)
-            except Exception:
-                # ignore exceptions, since player might imagine impossible outcomes.
-                # ignoring means the value function of this node will be flattened,
-                # to the one before.
-                pass
-            results.append((option_game, current_deck.count(card) / len(current_deck)))
-        return results
+        outcomes = development_card_outcomes(game, action.color)
+        if not outcomes:
+            return execute_deterministic(game, action)
+        return [
+            (_execute_outcome(game, action, card), proba) for card, proba in outcomes
+        ]
     elif action.action_type == ActionType.ROLL:
-        results = []
-        for roll in range(2, 13):
-            outcome = (roll // 2, math.ceil(roll / 2))
-
-            option_action = Action(action.color, action.action_type, outcome)
-            option_game = game.copy()
-            option_game.execute(option_action, validate_action=False)
-            results.append((option_game, number_probability(roll)))
-        return results
+        return [
+            (_execute_outcome(game, action, dice), proba)
+            for dice, proba in roll_outcomes()
+        ]
     elif action.action_type == ActionType.MOVE_ROBBER:
         (coordinate, robbed_color) = action.value
         if robbed_color is None:  # no one to steal, then deterministic
             return execute_deterministic(game, action)
-
-        results = []
-        opponent_hand = get_player_freqdeck(game.state, robbed_color)
-        opponent_hand_size = sum(opponent_hand)
-        if opponent_hand_size == 0:
-            # Nothing to steal
+        outcomes = steal_outcomes(game, robbed_color)
+        if not outcomes:  # nothing to steal
             return execute_deterministic(game, action)
-
-        for card in RESOURCES:
-            option_action = Action(
-                action.color,
-                action.action_type,
-                (coordinate, robbed_color),
-            )
-            option_action_record = ActionRecord(action=option_action, result=card)
-            option_game = game.copy()
-            try:
-                option_game.execute(
-                    option_action,
-                    validate_action=False,
-                    action_record=option_action_record,
-                )
-            except Exception:
-                # ignore exceptions, since player might imagine impossible outcomes.
-                # ignoring means the value function of this node will be flattened,
-                # to the one before.
-                pass
-            results.append((option_game, 1 / 5.0))
-        return results
+        return [
+            (_execute_outcome(game, action, resource), proba)
+            for resource, proba in outcomes
+        ]
     else:
         raise RuntimeError("Unknown ActionType " + str(action.action_type))
 

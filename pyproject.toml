@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "catanatron"
-version = "3.3.0"
+version = "3.3.0+bobcat.1"
 authors = [{ name = "Bryan Collazo", email = "bcollazo2010@gmail.com" }]
 description = "Fast Settlers of Catan Python Implementation"
 readme = "README.md"
@@ -38,8 +38,9 @@ dev = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/bcollazo/catanatron"
-Repository = "https://github.com/bcollazo/catanatron"
+Homepage = "https://github.com/Pablo1337PL/catanatron-bobcat-fork"
+Repository = "https://github.com/Pablo1337PL/catanatron-bobcat-fork"
+Upstream = "https://github.com/bcollazo/catanatron"
 
 [project.scripts]
 catanatron-play = "catanatron.cli.play:simulate"

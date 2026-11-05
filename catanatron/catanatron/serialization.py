@@ -24,7 +24,7 @@ directly; a self-play run never serializes anything.
 import random
 from collections import Counter, defaultdict
 
-from catanatron.game import Game
+from catanatron.game import TURNS_LIMIT, Game
 from catanatron.models.actions import generate_playable_actions
 from catanatron.models.board import STATIC_GRAPH, Board
 from catanatron.models.enums import (
@@ -228,6 +228,8 @@ def state_to_json(game: Game):
         "game": {
             "id": game.id,
             "seed": game.seed,
+            "board_seed": game.board_seed,
+            "dice_seed": s.dice_seed,  # HIDDEN INFO: every roll still to come
             "vps_to_win": game.vps_to_win,
             "discard_limit": s.discard_limit,
             "friendly_robber": s.friendly_robber,
@@ -298,6 +300,7 @@ def state_from_json(doc, players) -> Game:
     s.players = [by_color[c] for c in s.colors]  # seating order preserved
     s.discard_limit = doc["game"]["discard_limit"]
     s.friendly_robber = doc["game"]["friendly_robber"]
+    s.dice_seed = doc["game"].get("dice_seed")  # absent in older documents
     s.board = board_from_json(doc["board"], catan_map)
     s.player_state = dict(doc["player_state"])
     s.resource_freqdeck = list(doc["resource_freqdeck"])
@@ -332,6 +335,7 @@ def state_from_json(doc, players) -> Game:
     game = Game(players=[], initialize=False)
     game.id = doc["game"]["id"]
     game.seed = doc["game"]["seed"]
+    game.board_seed = doc["game"].get("board_seed")
     game.vps_to_win = doc["game"]["vps_to_win"]
     game.friendly_robber = s.friendly_robber
     game.random = s.random
@@ -353,8 +357,9 @@ SECRET_RESULT = {"BUY_DEVELOPMENT_CARD", "MOVE_ROBBER"}
 def client_view(doc, perspective=None):
     """Redacted projection of a document, safe to send to a browser or a bot.
 
-    Always removes what nobody at the table knows: the seed, and the order of
-    the development deck. The deck's *composition* survives, because a player
+    Always removes what nobody at the table knows: the seeds of the game and
+    of the dice, and the order of the development deck. (The board seed stays:
+    the board is public anyway.) The deck's *composition* survives, because a player
     legitimately reasons about the odds of drawing a knight; only its order,
     which would reveal future draws, is removed.
 
@@ -367,7 +372,9 @@ def client_view(doc, perspective=None):
     view["development_listdeck"] = dict(
         sorted(Counter(doc["development_listdeck"]).items())
     )
-    view["game"] = {k: v for k, v in doc["game"].items() if k != "seed"}
+    view["game"] = {
+        k: v for k, v in doc["game"].items() if k not in ("seed", "dice_seed")
+    }
     view.pop("random_state", None)
     if perspective is None:
         return view
@@ -490,6 +497,16 @@ def web_view(game, perspective=None) -> dict:
             "current_discard_count": state.discard_counts[state.current_player_index],
             "bot_colors": [p.color.value for p in state.players if p.is_bot],
             "winning_color": winner.value if winner else None,
+            # To replay the same game; the game and dice seeds reveal every
+            # future roll and draw, so they are shown only once it is over.
+            "seeds": {
+                "board": game.board_seed,
+                **(
+                    {"game": game.seed, "dice": game.dice_seed}
+                    if winner is not None or state.num_turns >= TURNS_LIMIT
+                    else {}
+                ),
+            },
             "state_index": len(state.action_records),
             "robber_coordinate": list(state.board.robber_coordinate),
             "longest_roads_by_player": {

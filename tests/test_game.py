@@ -230,7 +230,6 @@ def test_discard_is_configurable(fake_roll_dice):
 def test_friendly_robber_filters_tiles_in_game_playable_actions(fake_roll_dice):
     fake_roll_dice.return_value = (1, 6)
     players = [SimplePlayer(Color.RED), SimplePlayer(Color.BLUE)]
-    blocked_coordinates = {(2, -2, 0), (2, -1, -1)}
 
     regular_game = Game(players, seed=1, friendly_robber=False)
     build_initial_placements(regular_game)
@@ -243,6 +242,13 @@ def test_friendly_robber_filters_tiles_in_game_playable_actions(fake_roll_dice):
     friendly_coordinates = {
         action.value[0] for action in friendly_game.playable_actions
     }
+    # Both players have 2 visible points: every tile next to any building
+    # (the opponent's and the roller's own) is protected.
+    blocked_coordinates = {
+        coordinate
+        for coordinate, tile in friendly_game.state.board.map.land_tiles.items()
+        if any(n in friendly_game.state.board.buildings for n in tile.nodes.values())
+    } - {friendly_game.state.board.robber_coordinate}
 
     assert blocked_coordinates.issubset(regular_coordinates)
     assert blocked_coordinates.isdisjoint(friendly_coordinates)

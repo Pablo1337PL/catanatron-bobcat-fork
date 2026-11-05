@@ -139,6 +139,49 @@
   color: rgb(255 255 255 / 88%);
 }
 
+.home-page .seat-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 10px 9px;
+  color: rgb(255 255 255 / 85%);
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+.home-page .swap-row {
+  display: flex;
+  justify-content: center;
+  margin: -6px 0;
+}
+
+.home-page .MuiIconButton-root.swap-button {
+  color: rgb(255 255 255 / 70%);
+}
+
+.home-page .MuiIconButton-root.swap-button:hover {
+  color: white;
+  background: rgb(255 255 255 / 8%);
+}
+
+.home-page .MuiIconButton-root.swap-button.Mui-disabled {
+  color: rgb(255 255 255 / 25%);
+}
+
+.home-page .seed-fields {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.home-page .seed-fields .MuiInputLabel-root {
+  color: rgb(255 255 255 / 60%);
+}
+
+.home-page .seed-fields .MuiFormHelperText-root {
+  margin: 2px 0 0;
+}
+
 .home-page .switch-control {
   display: flex;
   flex-direction: column;
@@ -279,7 +322,8 @@
     gap: 0;
   }
 
-  .home-page .map-template-buttons {
+  .home-page .map-template-buttons,
+  .home-page .seed-fields {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

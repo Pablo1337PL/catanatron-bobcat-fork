@@ -2,7 +2,7 @@ import random
 import typing
 from collections import Counter, defaultdict
 from dataclasses import dataclass
-from typing import Dict, FrozenSet, List, Literal, Mapping, Set, Tuple, Type, Union
+from typing import Dict, FrozenSet, List, Literal, Mapping, Optional, Set, Tuple, Type, Union
 
 from catanatron.models.coordinate_system import UNIT_VECTORS, Coordinate, Direction, add
 from catanatron.models.enums import (
@@ -534,14 +534,22 @@ TOURNAMENT_MAP_TILES = initialize_tiles(
 TOURNAMENT_MAP = CatanMap.from_tiles(TOURNAMENT_MAP_TILES)
 
 
-def build_map(map_type: MapType, number_placement: NumberPlacement = "official_spiral"):
+def build_map(
+    map_type: MapType,
+    number_placement: NumberPlacement = "official_spiral",
+    board_seed: Optional[int] = None,
+):
+    """Map of the given type. ``board_seed`` makes it reproducible: tiles,
+    numbers and ports are drawn only from ``random.Random(board_seed)``.
+    TOURNAMENT is fixed and ignores it."""
+    rng = random.Random(board_seed) if board_seed is not None else None
     if map_type == "TOURNAMENT":
         return TOURNAMENT_MAP  # this assumes map is read-only data struct
     elif map_type == "MINI":
         return CatanMap.from_template(
-            MINI_MAP_TEMPLATE, number_placement=number_placement
+            MINI_MAP_TEMPLATE, number_placement=number_placement, rng=rng
         )
     else:
         return CatanMap.from_template(
-            BASE_MAP_TEMPLATE, number_placement=number_placement
+            BASE_MAP_TEMPLATE, number_placement=number_placement, rng=rng
         )

@@ -12,7 +12,7 @@ from catanatron.models.enums import Action, ActionPrompt, ActionRecord, ActionTy
 from catanatron.state import State
 from catanatron.apply_action import apply_action
 from catanatron.state_functions import player_key, player_has_rolled
-from catanatron.models.map import CatanMap, NumberPlacement
+from catanatron.models.map import CatanMap, NumberPlacement, build_map
 from catanatron.models.player import Color, Player
 from catanatron.observer import GameObserver
 
@@ -68,6 +68,9 @@ class Game:
         playable_actions (List[Action]): List of playable actions by current player.
     """
 
+    #: Seed the map was drawn from, if any (see ``__init__``).
+    board_seed: Optional[int] = None
+
     def __init__(
         self,
         players: Sequence[Player],
@@ -78,16 +81,30 @@ class Game:
         catan_map: Optional[CatanMap] = None,
         number_placement: NumberPlacement = "official_spiral",
         initialize: bool = True,
+        board_seed: Optional[int] = None,
+        dice_seed: Optional[int] = None,
+        seat_order: Optional[Sequence[Color]] = None,
     ):
         """Creates a game (doesn't run it).
 
         Args:
             players (List[Player]): list of players, should be at most 4.
             seed (int, optional): Random seed to use (for reproducing games). Defaults to None.
+                Without ``board_seed`` / ``dice_seed`` it drives everything random
+                (seats, board, deck, dice, steals); with them only seats, deck and steals.
             discard_limit (int, optional): Discard limit to use. Defaults to 7.
             vps_to_win (int, optional): Victory Points needed to win. Defaults to 10.
             catan_map (CatanMap, optional): Map to use. Defaults to None.
             initialize (bool, optional): Whether to initialize. Defaults to True.
+            board_seed (int, optional): Without ``catan_map``: the BASE map is drawn
+                only from ``random.Random(board_seed)``, independently of ``seed``.
+                With ``catan_map``: just recorded as the seed that map was built
+                from (see ``build_map``). Defaults to None (map from ``seed``).
+            dice_seed (int, optional): Dice independent of everything else: the
+                n-th roll is ``seeded_roll(dice_seed, n)``. Copies of the game do
+                not inherit it. Defaults to None (dice from ``seed``).
+            seat_order (List[Color], optional): Colors in seating order; the first
+                places first and starts. Defaults to None (random seats, from ``seed``).
         """
         #: Everything watching this game: the seated players, plus any
         #: accumulators handed to play(). One list, so each hook is one loop.
@@ -102,6 +119,9 @@ class Game:
             self.id = str(uuid.uuid4())
             self.vps_to_win = vps_to_win
             self.friendly_robber = friendly_robber
+            self.board_seed = board_seed
+            if catan_map is None and board_seed is not None:
+                catan_map = build_map("BASE", number_placement, board_seed)
             self.state = State(
                 players,
                 catan_map,
@@ -110,6 +130,11 @@ class Game:
                 number_placement=number_placement,
                 rng=self.random,
             )
+            self.state.dice_seed = dice_seed
+            if seat_order is not None:
+                # After State drew random seats, so the stream (deck, steals)
+                # is the same as with random seating.
+                self.state.set_seat_order(seat_order)
             self.playable_actions = generate_playable_actions(self.state)
 
             # Seat the players as observers here rather than in play(), so
@@ -117,6 +142,17 @@ class Game:
             # loop (play, play_tick, or the web server).
             for player in self.state.players:
                 self.watch(player)
+
+    @property
+    def dice_seed(self) -> Optional[int]:
+        """Seed of this game's dice (None: dice from the game's random stream).
+        Copies of a game have none."""
+        return self.state.dice_seed
+
+    def set_seat_order(self, colors):
+        """Seats players in the order of ``colors``; only before the first action."""
+        self.state.set_seat_order(colors)
+        self.playable_actions = generate_playable_actions(self.state)
 
     def watch(self, observer):
         """Have ``observer`` follow this game from here on."""
@@ -219,6 +255,23 @@ class Game:
         game_copy.id = self.id
         game_copy.vps_to_win = self.vps_to_win
         game_copy.friendly_robber = self.friendly_robber
+        game_copy.board_seed = self.board_seed
         game_copy.state = self.state.copy()
+        game_copy.playable_actions = self.playable_actions
+        return game_copy
+
+    def fast_copy(self) -> "Game":
+        """Same as :meth:`copy` (an independent copy for simulations), 2-3x
+        faster: no pickle, no deepcopy. Use it in tree search."""
+        game_copy = Game.__new__(Game)
+        game_copy.observers = []
+        game_copy._steppers = []
+        game_copy.seed = self.seed
+        game_copy.random = self.random
+        game_copy.id = self.id
+        game_copy.vps_to_win = self.vps_to_win
+        game_copy.friendly_robber = self.friendly_robber
+        game_copy.board_seed = self.board_seed
+        game_copy.state = self.state.fast_copy()
         game_copy.playable_actions = self.playable_actions
         return game_copy

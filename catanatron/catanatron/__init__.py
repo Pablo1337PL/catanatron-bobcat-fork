@@ -16,3 +16,9 @@ from catanatron.models.enums import (
     ORE,
     RESOURCES,
 )
+
+#: Version of the Bobcat fork's API (seeds, seat order, 1v1 friendly robber,
+#: fast copy, ...). Bumped whenever something the Bobcat agent relies on
+#: changes, so the agent can refuse to run on an older engine. Read from code
+#: rather than package metadata, so a ``git pull`` is enough to update it.
+BOBCAT_FORK_VERSION = 1

@@ -83,7 +83,14 @@ class State:
             Building dev card.
         free_roads_available (int): Number of roads available left in Road Building
             phase.
+        dice_seed (int, optional): When set, the n-th roll of the game is
+            ``seeded_roll(dice_seed, n)``: dice independent of everything else
+            (board, deck, players' searches). Never carried over to copies, so
+            simulations on copies cannot see the real game's future rolls.
     """
+
+    #: Class default, so copies (``copy``, ``fast_copy``) roll with ``random``.
+    dice_seed = None
 
     def __init__(
         self,
@@ -155,6 +162,27 @@ class State:
         """Helper for accessing color (player) who should decide next"""
         return self.colors[self.current_player_index]
 
+    def set_seat_order(self, colors):
+        """Seats the players in the order of ``colors`` (the first one places
+        first, 1-2-2-1, and starts the game).
+
+        Only before the first action: then every seat's state is still the
+        initial one, so reordering players and color indices is enough. The
+        board, the deck and the random stream stay as they are.
+        """
+        if self.action_records:
+            raise ValueError("Seat order can only be changed before the first action")
+        colors = tuple(colors)
+        by_color = {player.color: player for player in self.players}
+        if set(colors) != set(by_color) or len(colors) != len(by_color):
+            raise ValueError(
+                f"Seat order {[c.value for c in colors]} does not match players "
+                f"{[c.value for c in by_color]}"
+            )
+        self.players = [by_color[color] for color in colors]
+        self.colors = colors
+        self.color_to_index = {color: index for index, color in enumerate(colors)}
+
     def copy(self):
         """Creates a copy of this State class that can be modified without
         repercusions to this one. Immutable values are just copied over.
@@ -186,6 +214,54 @@ class State:
 
         # Current prompt / player
         # Two variables since there can be out-of-turn plays
+        state_copy.current_player_index = self.current_player_index
+        state_copy.current_turn_index = self.current_turn_index
+
+        state_copy.current_prompt = self.current_prompt
+        state_copy.is_initial_build_phase = self.is_initial_build_phase
+        state_copy.is_discarding = self.is_discarding
+        state_copy.discard_counts = self.discard_counts.copy()
+        state_copy.is_moving_knight = self.is_moving_knight
+        state_copy.is_road_building = self.is_road_building
+        state_copy.free_roads_available = self.free_roads_available
+
+        state_copy.is_resolving_trade = self.is_resolving_trade
+        state_copy.current_trade = self.current_trade
+        state_copy.acceptees = self.acceptees
+
+        return state_copy
+
+    def fast_copy(self):
+        """Same result as :meth:`copy`, without pickle (~2-3x faster).
+
+        Used by tree search, where copying is a large part of each simulation.
+        ``tests/test_fast_copy.py`` checks it field by field against ``copy``.
+        """
+        state_copy = State.__new__(State)
+        state_copy.random = self.random  # shared, as in copy()
+        state_copy.players = self.players
+        state_copy.discard_limit = self.discard_limit
+        state_copy.friendly_robber = self.friendly_robber
+
+        state_copy.board = self.board.fast_copy()
+
+        state_copy.player_state = self.player_state.copy()
+        state_copy.color_to_index = self.color_to_index
+        state_copy.colors = self.colors
+
+        state_copy.resource_freqdeck = self.resource_freqdeck.copy()
+        state_copy.development_listdeck = self.development_listdeck.copy()
+
+        buildings_by_color = {}
+        for color, by_type in self.buildings_by_color.items():
+            copied = defaultdict(list)
+            for building_type, items in by_type.items():
+                copied[building_type] = list(items)
+            buildings_by_color[color] = copied
+        state_copy.buildings_by_color = buildings_by_color
+        state_copy.action_records = self.action_records.copy()
+        state_copy.num_turns = self.num_turns
+
         state_copy.current_player_index = self.current_player_index
         state_copy.current_turn_index = self.current_turn_index
 
