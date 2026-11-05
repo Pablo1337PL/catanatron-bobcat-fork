@@ -132,22 +132,15 @@ class Board:
                     del self.connected_components[edge_color][b_index]
                     self.connected_components[edge_color].append(a_nodeset)
                     self.connected_components[edge_color].append(c_nodeset)
-
-                    # Update longest road by plowed player. Compare again with all
-                    self.road_lengths[edge_color] = max(
-                        *[
-                            len(longest_acyclic_path(self, component, edge_color))
-                            for component in self.connected_components[edge_color]
-                        ]
-                    )
-                    self.road_color, self.road_length = max(
-                        self.road_lengths.items(), key=lambda e: e[1]
-                    )
                 elif len(edges) == 1:
                     # Endpoint blocked: remove node_id from opponent's component
                     b_index = self._get_connected_component_index(node_id, edge_color)
                     if b_index is not None:
                         self.connected_components[edge_color][b_index].discard(node_id)
+                # The plowed player's roads may have changed; recompute them
+                # rather than trust the cached length.
+                self._recompute_road_length(edge_color)
+                self._reassign_longest_road()
 
         self.board_buildable_ids.discard(node_id)
         for n in STATIC_GRAPH.neighbors(node_id):
@@ -183,6 +176,37 @@ class Board:
             agenda.extend(expandable)
 
         return visited
+
+    def _recompute_road_length(self, color):
+        """Sets ``road_lengths[color]`` to the longest road over all its components."""
+        self.road_lengths[color] = max(
+            (
+                len(longest_acyclic_path(self, component, color))
+                for component in self.connected_components[color]
+            ),
+            default=0,
+        )
+
+    def _reassign_longest_road(self):
+        """Who holds Longest Road after a road was broken.
+
+        The holder keeps it while still (possibly tied) the longest with at
+        least 5 roads. Otherwise it goes to a sole longest road of 5+, and if
+        there is none (nobody reaches 5, or a tie) the card is set aside.
+        ``road_length`` is then the length to beat.
+        """
+        longest = max(self.road_lengths.values(), default=0)
+        leaders = [c for c, length in self.road_lengths.items() if length == longest]
+        if longest < 5:
+            holder = None
+        elif self.road_color in leaders:
+            holder = self.road_color
+        elif len(leaders) == 1:
+            holder = leaders[0]
+        else:
+            holder = None
+        self.road_color = holder
+        self.road_length = longest
 
     def _get_connected_component_index(self, node_id, color):
         for i, component in enumerate(self.connected_components[color]):
@@ -396,16 +420,16 @@ def longest_acyclic_path(board: Board, node_set: Set[int], color: Color):
                 edge = tuple(sorted((node, neighbor_node)))
 
                 # Must travel on a friendly road.
-                if not board.is_friendly_road(edge, color):
+                if not board.is_friendly_road(edge, color) or edge in path_thus_far:
                     continue
 
-                # Can't expand past an enemy node.
+                able_to_navigate = True
                 if board.is_enemy_node(neighbor_node, color):
-                    continue
-
-                if edge not in path_thus_far:
+                    # The road counts up to an enemy building, but cannot
+                    # continue through it.
+                    paths_from_this_node.append(path_thus_far + [edge])
+                else:
                     agenda.append((neighbor_node, path_thus_far + [edge]))
-                    able_to_navigate = True
 
             if not able_to_navigate:  # then it is leaf node
                 paths_from_this_node.append(path_thus_far)

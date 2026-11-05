@@ -36,10 +36,16 @@ const SEED_FIELDS = [
 ] as const;
 type SeedField = (typeof SEED_FIELDS)[number][0];
 
-/** "" means random; otherwise a non-negative integer. */
+/**
+ * "" means random; otherwise a non-negative integer that JavaScript holds
+ * exactly (a larger one would be rounded and replay a different game).
+ */
 function parseSeed(text: string): number | null | undefined {
-  if (text.trim() === "") return null;
-  return /^\d+$/.test(text.trim()) ? Number(text.trim()) : undefined;
+  const trimmed = text.trim();
+  if (trimmed === "") return null;
+  if (!/^\d+$/.test(trimmed)) return undefined;
+  const seed = Number(trimmed);
+  return Number.isSafeInteger(seed) ? seed : undefined;
 }
 
 export default function HomePage() {

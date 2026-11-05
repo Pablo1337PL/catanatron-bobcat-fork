@@ -61,8 +61,8 @@ def post_game_endpoint():
     Body: ``players`` (required, seated in this order unless ``random_seats``),
     ``map_template``, ``vps_to_win``, ``discard_limit``, ``friendly_robber``
     (1v1 by default), ``random_seats`` (default false), and the seeds
-    ``seed``, ``board_seed``, ``dice_seed`` (int >= 0 or null; a missing board
-    or dice seed is drawn at random, so every game can be replayed).
+    ``seed``, ``board_seed``, ``dice_seed`` (int >= 0 or null; a missing seed
+    is drawn at random below 2**31, so every game can be replayed).
     """
     if not request.is_json or request.json is None or "players" not in request.json:
         abort(400, description="Missing or invalid JSON body: 'players' key required")
@@ -108,6 +108,10 @@ def post_game_endpoint():
         if value is not None and not (_is_int(value) and value >= 0):
             abort(400, description=f"'{name}' must be a non-negative integer or null")
         seeds[name] = value
+    # Missing seeds are drawn here (not by Game, whose default seed can reach
+    # 2**63) so they stay exact as JavaScript numbers and the UI can replay them.
+    if seeds["seed"] is None:
+        seeds["seed"] = random.randrange(2**31)
     if seeds["board_seed"] is None and map_template != "TOURNAMENT":
         seeds["board_seed"] = random.randrange(2**31)
     if seeds["dice_seed"] is None:

@@ -68,9 +68,11 @@ def test_seeds_are_used_and_recorded(client):
         for c in a.state.board.map.land_tiles
     )
 
-    # missing board / dice seeds are drawn, so every game can be replayed
+    # missing seeds are drawn, so every game can be replayed; below 2**31 so
+    # a browser (JavaScript numbers) shows them exactly
     _, c = _new_game(client)
-    assert c.board_seed is not None and c.dice_seed is not None
+    for seed in (c.seed, c.board_seed, c.dice_seed):
+        assert 0 <= seed < 2**31
 
     view = _latest(client, a_id)
     assert view["seeds"] == {"board": 2}  # dice and game seeds only after the end

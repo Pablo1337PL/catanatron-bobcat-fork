@@ -77,6 +77,11 @@ test("seeds are sent, invalid ones block the start", async () => {
   await screen.findByText("BOBCAT");
   fireEvent.change(screen.getByLabelText("Board"), { target: { value: "-3" } });
   expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+  // Above 2^53 the number would be rounded and replay a different game.
+  fireEvent.change(screen.getByLabelText("Board"), {
+    target: { value: "4673525987207697974" },
+  });
+  expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
   fireEvent.change(screen.getByLabelText("Board"), { target: { value: "100" } });
   fireEvent.change(screen.getByLabelText("Dice"), { target: { value: "7" } });
   expect((await start()).seeds).toEqual({ seed: null, boardSeed: 100, diceSeed: 7 });
