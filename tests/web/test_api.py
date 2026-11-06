@@ -203,27 +203,6 @@ def test_database_roundtrips_preserve_rng_state_and_continuation(client):
     ]
 
 
-def test_mcts_analysis_endpoint(client):
-    """Test the MCTS analysis endpoint."""
-    post_response = client.post("/api/games", json={"players": ["R", "R"]})
-    game_id = json.loads(post_response.data)["game_id"]
-
-    # Request MCTS analysis for the latest state
-    response = client.get(f"/api/games/{game_id}/states/latest/mcts-analysis")
-    assert response.status_code == 200
-    data = json.loads(response.data)
-    assert data["success"] is True
-    assert "probabilities" in data
-    # Further checks on probabilities structure if known
-    assert len(data["probabilities"]) == 2  # For two players
-
-
-def test_mcts_analysis_game_not_found(client):
-    """Test MCTS analysis for a non-existent game."""
-    response = client.get("/api/games/nonexistent/states/nonexistent/mcts-analysis")
-    assert response.status_code == 400
-
-
 # Stress test endpoint is simple, just check if it runs
 def test_stress_test_endpoint(client):
     response = client.get("/api/stress-test")

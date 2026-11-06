@@ -4,6 +4,7 @@ import {
   getShortTileString,
   findTileById,
   findTileByCoordinate,
+  describeAction,
   humanizeActionRecord,
   humanizeTradeAction,
 } from "./promptUtils";
@@ -346,5 +347,42 @@ describe("humanizeTradeAction", () => {
       ["BRICK", null, null, null, "ORE"],
     ];
     expect(humanizeTradeAction(action)).toBe("1 BRICK => ORE");
+  });
+});
+
+describe("describeAction", () => {
+  const gameState = {
+    tiles: [
+      {
+        coordinate: [0, 0, 0],
+        tile: { id: 0, type: "RESOURCE_TILE", resource: "BRICK", number: 6 },
+      },
+      { coordinate: [1, -1, 0], tile: { id: 1, type: "DESERT" } },
+    ],
+    adjacent_tiles: {
+      0: [
+        { id: 0, type: "RESOURCE_TILE", resource: "BRICK", number: 6 },
+        { id: 1, type: "DESERT" },
+      ],
+      1: [{ id: 0, type: "RESOURCE_TILE", resource: "BRICK", number: 6 }],
+    },
+  } as unknown as GameState;
+
+  test.each([
+    [["RED", "ROLL", null], "Roll"],
+    [["RED", "END_TURN", null], "End turn"],
+    [["RED", "BUILD_SETTLEMENT", 0], "Settlement 6-DESERT"],
+    [["RED", "BUILD_CITY", 0], "City 6-DESERT"],
+    [["RED", "BUILD_ROAD", [0, 1]], "Road 6"],
+    [["RED", "PLAY_MONOPOLY", "ORE"], "Monopoly ORE"],
+    [["RED", "PLAY_YEAR_OF_PLENTY", ["WOOD", "ORE"]], "Year of Plenty WOOD + ORE"],
+    [["RED", "MOVE_ROBBER", [[0, 0, 0], "BLUE"]], "Robber 6 BRICK, steal BLUE"],
+    [["RED", "MOVE_ROBBER", [[1, -1, 0]]], "Robber THE DESERT"],
+    [
+      ["RED", "MARITIME_TRADE", ["WOOD", "WOOD", "WOOD", "WOOD", "ORE"]],
+      "Trade 4 WOOD => ORE",
+    ],
+  ])("%j", (action, expected) => {
+    expect(describeAction(gameState, action as GameAction)).toEqual(expected);
   });
 });

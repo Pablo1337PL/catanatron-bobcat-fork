@@ -1,4 +1,5 @@
 import type {
+  GameAction,
   Tile,
   PlacedTile,
   GameActionRecord,
@@ -32,26 +33,11 @@ export function humanizeActionRecord(
       const action = actionRecord[0] as BuildCityAction;
       const parts = action[1].split("_");
       const building = parts[parts.length - 1];
-      const tileId = action[2];
-      const tiles = gameState.adjacent_tiles[tileId];
-      const tileString = tiles.map(getShortTileString).join("-");
-      return `${player} BUILT ${building} ON ${tileString}`;
+      return `${player} BUILT ${building} ON ${nodeString(gameState, action[2])}`;
     }
     case "BUILD_ROAD": {
       const action = actionRecord[0] as BuildRoadAction;
-      const edge = action[2];
-      const a = gameState.adjacent_tiles[edge[0]].flatMap((tile) =>
-        "id" in tile ? [tile.id] : []
-      );
-      const b = gameState.adjacent_tiles[edge[1]].flatMap((tile) =>
-        "id" in tile ? [tile.id] : []
-      );
-      const intersection = a.filter((t) => b.includes(t));
-      const tiles = intersection.map(
-        (tileId) => findTileById(gameState, tileId).tile,
-      );
-      const edgeString = tiles.map(getShortTileString).join("-");
-      return `${player} BUILT ROAD ON ${edgeString}`;
+      return `${player} BUILT ROAD ON ${edgeString(gameState, action[2])}`;
     }
     case "PLAY_KNIGHT_CARD": {
       return `${player} PLAYED KNIGHT CARD`;
@@ -90,6 +76,66 @@ export function humanizeActionRecord(
       throw new Error(`Unknown action type: ${action[1]}`);
   }
 }
+/** The tiles around a node, e.g. "6-8-5". */
+function nodeString(gameState: GameState, nodeId: number): string {
+  return gameState.adjacent_tiles[nodeId].map(getShortTileString).join("-");
+}
+
+/** The tiles along an edge, e.g. "6-8". */
+function edgeString(gameState: GameState, edge: [number, number]): string {
+  const a = gameState.adjacent_tiles[edge[0]].flatMap((tile) =>
+    "id" in tile ? [tile.id] : []
+  );
+  const b = gameState.adjacent_tiles[edge[1]].flatMap((tile) =>
+    "id" in tile ? [tile.id] : []
+  );
+  const intersection = a.filter((t) => b.includes(t));
+  const tiles = intersection.map(
+    (tileId) => findTileById(gameState, tileId).tile,
+  );
+  return tiles.map(getShortTileString).join("-");
+}
+
+/**
+ * A short label for an action that has not happened yet (analysis lines),
+ * without its player or outcome, e.g. "Road 6-8" or "Robber 9 ORE, steal BLUE".
+ */
+export function describeAction(gameState: GameState, action: GameAction): string {
+  switch (action[1]) {
+    case "ROLL":
+      return "Roll";
+    case "DISCARD_RESOURCE":
+      return action[2] ? `Discard ${action[2]}` : "Discard";
+    case "BUY_DEVELOPMENT_CARD":
+      return "Buy development card";
+    case "BUILD_SETTLEMENT":
+      return `Settlement ${nodeString(gameState, action[2])}`;
+    case "BUILD_CITY":
+      return `City ${nodeString(gameState, action[2])}`;
+    case "BUILD_ROAD":
+      return `Road ${edgeString(gameState, action[2])}`;
+    case "PLAY_KNIGHT_CARD":
+      return "Knight";
+    case "PLAY_ROAD_BUILDING":
+      return "Road Building";
+    case "PLAY_MONOPOLY":
+      return `Monopoly ${action[2]}`;
+    case "PLAY_YEAR_OF_PLENTY":
+      return `Year of Plenty ${action[2].join(" + ")}`;
+    case "MOVE_ROBBER": {
+      const tile = getTileString(findTileByCoordinate(gameState, action[2][0]));
+      const victim = action[2][1];
+      return victim ? `Robber ${tile}, steal ${victim}` : `Robber ${tile}`;
+    }
+    case "MARITIME_TRADE":
+      return `Trade ${humanizeTradeAction(action)}`;
+    case "END_TURN":
+      return "End turn";
+    default:
+      throw new Error(`Unknown action type: ${(action as GameAction)[1]}`);
+  }
+}
+
 export function humanizeTradeAction(action: MaritimeTradeAction): string {
   const out = action[2]
     .slice(0, 4)

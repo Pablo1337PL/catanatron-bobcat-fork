@@ -4,7 +4,7 @@ from flask import Flask
 from flask_cors import CORS
 
 
-def create_app(test_config=None, game_defaults=None, forced_rules=None):
+def create_app(test_config=None, game_defaults=None, forced_rules=None, analyzer=None):
     """Create and configure an instance of the Flask application.
 
     Args:
@@ -16,6 +16,12 @@ def create_app(test_config=None, game_defaults=None, forced_rules=None):
         forced_rules (dict, optional): Rules every new game gets regardless of
             the request, e.g. ``{"vps_to_win": 15, "discard_limit": 9,
             "friendly_robber": True}``.
+        analyzer (callable, optional): The engine behind
+            ``GET /api/games/<id>/states/<index>/analysis``: called with a
+            copy of the game, returns the analysis document described in
+            :func:`catanatron.web.api.analysis_endpoint`. It may raise
+            ValueError for a position it cannot analyze. Without it the
+            endpoint answers 501.
     """
     app = Flask(__name__)
     CORS(app)
@@ -32,6 +38,7 @@ def create_app(test_config=None, game_defaults=None, forced_rules=None):
     )
     app.config["GAME_DEFAULTS"] = dict(game_defaults or {})
     app.config["FORCED_RULES"] = dict(forced_rules or {})
+    app.config["ANALYZER"] = analyzer
     if test_config is not None:
         app.config.update(test_config)
 

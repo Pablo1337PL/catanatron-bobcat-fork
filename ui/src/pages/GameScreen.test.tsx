@@ -19,7 +19,7 @@ const snackbar = vi.hoisted(() => ({
 vi.mock("../utils/apiClient", () => ({
   getState: vi.fn(),
   postAction: vi.fn(),
-  getMctsAnalysis: vi.fn(),
+  getAnalysis: vi.fn(),
   setPerspective: vi.fn(),
 }));
 vi.mock("../components/Snackbar", () => ({

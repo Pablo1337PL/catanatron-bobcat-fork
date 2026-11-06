@@ -1,7 +1,6 @@
 import json
 import logging
 import random
-import traceback
 
 from flask import Response, Blueprint, current_app, jsonify, abort, request
 
@@ -13,7 +12,6 @@ from catanatron.models.map import build_map
 from catanatron.players.minimax import AlphaBetaPlayer
 from catanatron.registry import REGISTRY, describe, SpecError
 from catanatron.web.players import register_web_players
-from catanatron.web.mcts_analysis import GameAnalyzer
 
 bp = Blueprint("api", __name__, url_prefix="/api")
 VALID_MAP_TEMPLATES = {"BASE", "MINI", "TOURNAMENT"}
@@ -201,52 +199,74 @@ def stress_test_endpoint():
 
 
 @bp.route(
-    "/games/<string:game_id>/states/<string:state_index>/mcts-analysis", methods=["GET"]
+    "/games/<string:game_id>/states/<string:state_index>/analysis", methods=["GET"]
 )
-def mcts_analysis_endpoint(game_id, state_index):
-    """Get MCTS analysis for specific game state."""
-    logging.info(f"MCTS analysis request for game {game_id} at state {state_index}")
+def analysis_endpoint(game_id, state_index):
+    """Analyze a position with the server's engine (``create_app(analyzer=...)``).
 
-    # Convert 'latest' to None for consistency with get_game_state
-    parsed_state_index = _parse_state_index(state_index)
-    try:
-        game = get_game_state(game_id, parsed_state_index)
-        if game is None:
-            logging.error(
-                f"Game/state not found: {game_id}/{state_index}"
-            )  # Use original state_index for logging
-            abort(404, description="Game state not found")
+    The analyzer gets a copy of the game and returns::
 
-        analyzer = GameAnalyzer(num_simulations=100)
-        probabilities = analyzer.analyze_win_probabilities(game)
-
-        logging.info(f"Analysis successful. Probabilities: {probabilities}")
-        return Response(
-            response=json.dumps(
+        {
+            "engine": "Bobcat az_v1_gen14 · MCTS 1000",   # label for the UI
+            "player": "RED",                  # the seat to decide
+            "win_probability": {"RED": 0.62, "BLUE": 0.38},
+            "simulations": 1000, "seconds": 2.1,
+            "moves": [                        # every legal action, best first
                 {
-                    "success": True,
-                    "probabilities": probabilities,
-                    "state_index": (
-                        parsed_state_index
-                        if parsed_state_index is not None
-                        else len(game.state.action_records)
-                    ),
-                }
-            ),
-            status=200,
-            mimetype="application/json",
-        )
+                    "action": ["RED", "BUILD_ROAD", [6, 7]],
+                    "probability": 0.41,      # the engine's choice (e.g. visit share)
+                    "prior": 0.35,            # the policy before searching, or null
+                    "visits": 410,
+                    "win_probability": {...}, # after this move, or null if unexplored
+                    "line": [action, ...],    # expected continuation, the move first
+                    "line_end": "chance",     # why it stops: chance, terminal,
+                },                            # unexplored, or null (depth reached)
+            ],
+        }
 
-    except Exception as e:
-        logging.error(f"Error in MCTS analysis endpoint: {str(e)}")
-        logging.error(traceback.format_exc())
-        return Response(
-            response=json.dumps(
-                {"success": False, "error": str(e), "trace": traceback.format_exc()}
-            ),
-            status=500,
-            mimetype="application/json",
-        )
+    The endpoint adds ``state_index``. A finished game is not sent to the
+    analyzer. Errors: 404 unknown game, 501 no analyzer, 400 the analyzer
+    raised ValueError (e.g. an unsupported number of players), 500 otherwise.
+    """
+    parsed_state_index = _parse_state_index(state_index)
+    game = get_game_state(game_id, parsed_state_index)
+    if game is None:
+        abort(404, description="Game state not found")
+    analyzer = current_app.config.get("ANALYZER")
+    if analyzer is None:
+        return _json_error(501, "no_analyzer", "This server has no analysis engine")
+
+    winner = game.winning_color()
+    if winner is not None:
+        analysis = {
+            "engine": None,
+            "player": None,
+            "win_probability": {
+                c.value: 1.0 if c == winner else 0.0 for c in game.state.colors
+            },
+            "simulations": 0,
+            "seconds": 0.0,
+            "moves": [],
+        }
+    else:
+        try:
+            analysis = analyzer(game.copy())
+        except ValueError as error:
+            return _json_error(400, "unsupported", str(error))
+        except Exception as error:  # the engine is outside this package
+            logging.exception("Analysis of %s/%s failed", game_id, state_index)
+            return _json_error(500, "analysis_failed", str(error))
+
+    analysis["state_index"] = len(game.state.action_records)
+    return jsonify(analysis)
+
+
+def _json_error(status, error, message):
+    return Response(
+        response=json.dumps({"error": error, "message": message}),
+        status=status,
+        mimetype="application/json",
+    )
 
 
 def _action_error(error, message):

@@ -137,50 +137,53 @@ export async function postAction(gameId: string, action?: GameAction) {
   }
 }
 
-export type MCTSProbabilities = {
-  [K in Color]: number;
+/** One legal action of the analyzed position, as GET .../analysis returns it. */
+export type AnalysisMove = {
+  action: GameAction;
+  /** The engine's choice, e.g. MCTS visit share; all moves sum to 1. */
+  probability: number;
+  /** The policy before searching, or null. */
+  prior: number | null;
+  visits: number;
+  /** After this move; null when the engine never tried it. */
+  win_probability: Partial<Record<Color, number>> | null;
+  /** The expected continuation, starting with this move. */
+  line: GameAction[];
+  /** Why the line stops; null when it reached the engine's depth. */
+  line_end: "chance" | "terminal" | "unexplored" | null;
 };
 
-type MCTSSuccessBody = {
-  success: true;
-  probabilities: MCTSProbabilities;
+/** The server engine's view of one position (create_app(analyzer=...)). */
+export type Analysis = {
+  engine: string | null;
+  player: Color | null;
+  win_probability: Partial<Record<Color, number>>;
+  simulations: number;
+  seconds: number;
+  moves: AnalysisMove[];
   state_index: number;
 };
-type MCTSErrorBody = {
-  success: false;
-  error: string;
-  trace: string;
-};
 
-export async function getMctsAnalysis(
+/** Analyzes a position; throws an Error with the server's message on failure. */
+export async function getAnalysis(
   gameId: string,
   stateIndex: StateIndex = "latest"
-) {
+): Promise<Analysis> {
   try {
-    console.log("Getting MCTS analysis for:", {
-      gameId,
-      stateIndex,
-      url: `${API_URL}/api/games/${gameId}/states/${stateIndex}/mcts-analysis`,
-    });
-
-    if (!gameId) {
-      throw new Error("No gameId provided to getMctsAnalysis");
-    }
-
-    const response = await axios.get<MCTSSuccessBody | MCTSErrorBody>(
-      `${API_URL}/api/games/${gameId}/states/${stateIndex}/mcts-analysis`
+    const response = await axios.get<Analysis>(
+      `${API_URL}/api/games/${gameId}/states/${stateIndex}/analysis`
     );
-
-    console.log("MCTS analysis response:", response.data);
     return response.data;
-  } catch (error: any) {
-    // AxiosResponse<MCTSErrorBody>
-    console.error("MCTS analysis error:", {
-      message: error.message,
-      status: error.response?.status,
-      data: error.response?.data,
-      stack: error.stack,
-    });
+  } catch (error) {
+    if (axios.isAxiosError(error)) {
+      const body = error.response?.data as { message?: string } | undefined;
+      if (error.response?.status === 501) {
+        throw new Error("This server has no analysis engine.");
+      }
+      if (body?.message) {
+        throw new Error(body.message);
+      }
+    }
     throw error;
   }
 }
