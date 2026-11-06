@@ -1,11 +1,13 @@
 import json
 import logging
 import random
+import threading
 
 from flask import Response, Blueprint, current_app, jsonify, abort, request
 
-from catanatron.web.models import upsert_game_state, get_game_state
+from catanatron.web.models import StaleGameError, upsert_game_state, get_game_state
 from catanatron.serialization import action_from_json, web_view
+from catanatron.state_functions import get_state_index
 from catanatron.models.player import Color
 from catanatron.game import Game
 from catanatron.models.map import build_map
@@ -147,11 +149,44 @@ def get_game_endpoint(game_id, state_index):
     )
 
 
+#: One move at a time per game in this process. Requests run in threads, and a
+#: client may ask for the same bot move twice (React StrictMode runs effects
+#: twice); two moves played from the same state would both try to save it.
+_game_locks = {}
+_game_locks_guard = threading.Lock()
+
+
+def _game_lock(game_id):
+    with _game_locks_guard:
+        return _game_locks.setdefault(game_id, threading.Lock())
+
+
 @bp.route("/games/<string:game_id>/actions", methods=["POST"])
 def post_action_endpoint(game_id):
+    """Play the bot's move (empty body) or the posted one.
+
+    409 ``game_busy`` while another move of this game is being played, and 409
+    ``stale_game`` if the game moved on while this one was being decided (e.g.
+    another server process); the game is left as the other request saved it.
+    """
+    lock = _game_lock(game_id)
+    if not lock.acquire(blocking=False):
+        return _json_error(
+            409, "game_busy", "Another move of this game is being played"
+        )
+    try:
+        return _post_action(game_id)
+    except StaleGameError as error:
+        return _json_error(409, "stale_game", str(error))
+    finally:
+        lock.release()
+
+
+def _post_action(game_id):
     game = get_game_state(game_id)
     if game is None:
         abort(404, description="Resource not found")
+    loaded_index = get_state_index(game.state)
 
     if game.winning_color() is not None:
         return Response(
@@ -164,7 +199,7 @@ def post_action_endpoint(game_id):
     body_is_empty = (not request.data) or request.json is None or request.json == {}
     if game.state.current_player().is_bot or body_is_empty:
         game.play_tick()
-        upsert_game_state(game)
+        upsert_game_state(game, expected_index=loaded_index)
     else:
         try:
             action = action_from_json(request.json)
@@ -176,7 +211,7 @@ def post_action_endpoint(game_id):
             return _action_error(
                 "illegal_action", "Action not allowed in the current game state"
             )
-        upsert_game_state(game)
+        upsert_game_state(game, expected_index=loaded_index)
 
     return Response(
         response=json.dumps(web_view(game, _perspective(game))),

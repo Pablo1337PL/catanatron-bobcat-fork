@@ -1,12 +1,15 @@
 import os
+import sqlite3
+import threading
 
 import pytest
 import json
 from catanatron import Color, Game, RandomPlayer
-from catanatron.serialization import SCHEMA_VERSION
-from catanatron.web import create_app
+from catanatron.serialization import SCHEMA_VERSION, state_to_json
+from catanatron.web import api, create_app
 from catanatron.web.models import (
     db,
+    StaleGameError,
     StoredAction,
     StoredGame,
     get_game_state,
@@ -494,3 +497,95 @@ def test_human_seat_is_not_a_bot_after_reload(client):
     with client.application.app_context():
         game = get_game_state(game_id)
         assert [p.is_bot for p in game.state.players].count(False) == 1
+
+
+def test_a_save_from_an_old_state_is_refused(client):
+    """Two requests that loaded the same state must not both be saved: the
+    second would overwrite the first one's move (or, from further behind,
+    move the head back onto positions the log already holds)."""
+    game_id = json.loads(client.post("/api/games", json={"players": ["R", "R"]}).data)[
+        "game_id"
+    ]
+    with client.application.app_context():
+        first, second = get_game_state(game_id), get_game_state(game_id)
+        loaded_at = len(first.state.action_records)
+        first.play_tick()
+        upsert_game_state(first, expected_index=loaded_at)
+
+        second.play_tick()
+        with pytest.raises(StaleGameError):
+            upsert_game_state(second, expected_index=loaded_at)
+        db.session.remove()
+        stored = db.session.get(StoredGame, game_id)
+        assert stored.head_index == loaded_at + 1
+        assert json.loads(stored.head_state) == state_to_json(first)
+
+
+def test_a_save_never_moves_the_head_backwards(client):
+    game_id = json.loads(client.post("/api/games", json={"players": ["R", "R"]}).data)[
+        "game_id"
+    ]
+    with client.application.app_context():
+        behind = get_game_state(game_id)
+    for _ in range(3):
+        client.post(f"/api/games/{game_id}/actions", json={})
+
+    with client.application.app_context():
+        behind.play_tick()
+        with pytest.raises(StaleGameError):
+            upsert_game_state(behind)
+        assert db.session.get(StoredGame, game_id).head_index == 3
+
+
+def test_a_move_of_a_game_that_is_being_played_is_a_409(client):
+    game_id = json.loads(client.post("/api/games", json={"players": ["R", "R"]}).data)[
+        "game_id"
+    ]
+    with api._game_lock(game_id):
+        busy = client.post(f"/api/games/{game_id}/actions", json={})
+    assert busy.status_code == 409
+    assert busy.json["error"] == "game_busy"
+    assert client.post(f"/api/games/{game_id}/actions", json={}).status_code == 200
+
+
+def test_concurrent_moves_keep_the_game_consistent(tmp_path, monkeypatch):
+    """The UI could ask for the same bot move twice at once (React StrictMode).
+    Both were played and saved: one failed on the log's key, the other left the
+    head behind the log, and from then on every save of the game failed."""
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'games.db'}")
+    app = create_app({"TESTING": True})
+    client = app.test_client()
+    game_id = json.loads(client.post("/api/games", json={"players": ["R", "R"]}).data)[
+        "game_id"
+    ]
+    statuses = []
+
+    def play():
+        for _ in range(15):
+            statuses.append(
+                client.post(f"/api/games/{game_id}/actions", json={}).status_code
+            )
+
+    threads = [threading.Thread(target=play) for _ in range(4)]
+    for thread in threads:
+        thread.start()
+    for thread in threads:
+        thread.join()
+
+    assert set(statuses) <= {200, 409} and 200 in statuses
+    with app.app_context():
+        stored = db.session.get(StoredGame, game_id)
+        log = db.session.query(StoredAction).filter_by(uuid=game_id).count()
+        assert stored.head_index == log == statuses.count(200)
+    # The log replays and the game goes on
+    assert client.get(f"/api/games/{game_id}/states/{log - 1}").status_code == 200
+    assert client.post(f"/api/games/{game_id}/actions", json={}).status_code == 200
+
+
+def test_a_sqlite_file_uses_a_write_ahead_log(tmp_path, monkeypatch):
+    """With the default rollback journal a request reading a game failed with
+    "database is locked" while another one was saving a move."""
+    path = tmp_path / "games.db"
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{path}")
+    create_app({"TESTING": True})
+    assert sqlite3.connect(path).execute("PRAGMA journal_mode").fetchone() == ("wal",)

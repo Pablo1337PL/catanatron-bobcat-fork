@@ -35,6 +35,7 @@ from catanatron.serialization import (
 )
 from catanatron.state_functions import get_state_index
 from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, create_engine
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
 from flask_sqlalchemy import SQLAlchemy
@@ -107,12 +108,34 @@ def database_session():
         session.close()
 
 
-def upsert_game_state(game: Game, session_param=None):
-    """Save a game: create its row the first time, then append what is new."""
+class StaleGameError(Exception):
+    """The stored game moved on since this copy was loaded, so saving it would
+    overwrite a newer state with an older (or diverged) one."""
+
+
+def upsert_game_state(game: Game, session_param=None, expected_index=None):
+    """Save a game: create its row the first time, then append what is new.
+
+    ``expected_index`` is the state_index the game was loaded at. If the stored
+    game is no longer at it (another request played on in the meantime),
+    nothing is written and :class:`StaleGameError` is raised. A save never
+    moves the head backwards, with or without it.
+    """
     session = session_param or db.session
     head = get_state_index(game.state)
     document = json.dumps(state_to_json(game))
-    stored = session.get(StoredGame, game.id)
+    # populate_existing: compare against the database, not this session's copy
+    stored = session.get(StoredGame, game.id, populate_existing=True)
+
+    if stored is not None and (
+        head < stored.head_index
+        or (expected_index is not None and stored.head_index != expected_index)
+    ):
+        session.rollback()
+        raise StaleGameError(
+            f"game {game.id} is at {stored.head_index}, this copy was loaded at "
+            f"{expected_index} and reached {head}"
+        )
 
     if stored is None:
         stored = StoredGame(
@@ -140,7 +163,13 @@ def upsert_game_state(game: Game, session_param=None):
 
     stored.head_index = head
     stored.head_state = document
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError as error:
+        # Another process appended the same positions between our read and
+        # this write (the composite key of StoredAction caught it).
+        session.rollback()
+        raise StaleGameError(f"game {game.id} was saved concurrently") from error
     return stored
 
 

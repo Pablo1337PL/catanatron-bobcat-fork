@@ -2,6 +2,7 @@ import os
 
 from flask import Flask
 from flask_cors import CORS
+from sqlalchemy import event
 
 
 def create_app(test_config=None, game_defaults=None, forced_rules=None, analyzer=None):
@@ -41,12 +42,20 @@ def create_app(test_config=None, game_defaults=None, forced_rules=None, analyzer
     app.config["ANALYZER"] = analyzer
     if test_config is not None:
         app.config.update(test_config)
+    sqlite_file = _is_sqlite_file(app.config["SQLALCHEMY_DATABASE_URI"])
+    if sqlite_file:
+        # Requests run in threads (a bot thinking, the analysis panel), so wait
+        # for a writer longer than sqlite3's default 5 s before giving up.
+        options = app.config.setdefault("SQLALCHEMY_ENGINE_OPTIONS", {})
+        options.setdefault("connect_args", {}).setdefault("timeout", 30)
 
     # ===== Initialize Database
     from catanatron.web.models import db
 
     with app.app_context():
         db.init_app(app)
+        if sqlite_file:
+            event.listen(db.engine, "connect", _use_wal)
         db.create_all()
 
     # ===== Initialize Routes
@@ -55,3 +64,16 @@ def create_app(test_config=None, game_defaults=None, forced_rules=None, analyzer
     app.register_blueprint(api.bp)
 
     return app
+
+
+def _is_sqlite_file(database_url):
+    return database_url.startswith("sqlite") and ":memory:" not in database_url
+
+
+def _use_wal(dbapi_connection, _connection_record):
+    """Write-ahead log: readers never wait for a writer, nor a writer for them.
+
+    With the default rollback journal a request reading a game could fail with
+    "database is locked" while another one was saving a move.
+    """
+    dbapi_connection.execute("PRAGMA journal_mode=WAL")

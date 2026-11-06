@@ -1,4 +1,4 @@
-import { useEffect, useState, useContext } from "react";
+import { useEffect, useRef, useState, useContext } from "react";
 import { useParams } from "react-router-dom";
 import PropTypes from "prop-types";
 import { GridLoader } from "react-spinners";
@@ -30,6 +30,7 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { state, dispatch } = useContext(store);
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [isBotThinking, setIsBotThinking] = useState(false);
+  const botMoveInFlight = useRef(false);
 
   // Load game state
   useEffect(() => {
@@ -55,14 +56,29 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
       state.gameState.bot_colors.includes(state.gameState.current_color) &&
       !state.gameState.winning_color
     ) {
+      // One bot move at a time: StrictMode runs this effect twice and the
+      // state can be set again while the bot thinks, and every extra request
+      // would ask the server to play the same move again.
+      if (botMoveInFlight.current) {
+        return;
+      }
+      botMoveInFlight.current = true;
       // Make bot click next action.
       (async () => {
         setIsBotThinking(true);
         const start = new Date();
-        const gameState = await postAction(gameId);
+        let gameState;
+        try {
+          gameState = await postAction(gameId);
+        } catch (error) {
+          botMoveInFlight.current = false;
+          setIsBotThinking(false);
+          throw error;
+        }
         const requestTime = new Date().valueOf() - start.valueOf();
         setTimeout(() => {
           // simulate thinking
+          botMoveInFlight.current = false;
           setIsBotThinking(false);
           dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
           if (getHumanColor(gameState)) {

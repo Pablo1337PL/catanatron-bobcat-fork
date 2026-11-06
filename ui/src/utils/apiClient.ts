@@ -115,7 +115,8 @@ export async function getState(
  * action=undefined means bot action.
  *
  * An action the game cannot take is answered with a 400 and leaves the game
- * as it was: show the server's message and carry on from the current state.
+ * as it was, and a 409 means another request was playing this game at the
+ * same time: show the server's message and carry on from the current state.
  */
 export async function postAction(gameId: string, action?: GameAction) {
   try {
@@ -126,7 +127,10 @@ export async function postAction(gameId: string, action?: GameAction) {
     );
     return response.data;
   } catch (error) {
-    if (axios.isAxiosError(error) && error.response?.status === 400) {
+    if (
+      axios.isAxiosError(error) &&
+      (error.response?.status === 400 || error.response?.status === 409)
+    ) {
       const body = error.response.data as { message?: string } | undefined;
       enqueueSnackbar(body?.message ?? "Action not allowed", {
         variant: "warning",

@@ -1,4 +1,4 @@
-import { useContext } from "react";
+import { Fragment, StrictMode, useContext } from "react";
 import { act, cleanup, render, screen } from "@testing-library/react";
 import { createTheme, ThemeProvider } from "@mui/material/styles";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -52,25 +52,30 @@ function renderGameScreen({
   initialEntry = "/games/game-123",
   routePath = "/games/:gameId",
   replayMode = false,
+  strictMode = false,
 }: {
   initialEntry?: string;
   routePath?: string;
   replayMode?: boolean;
+  strictMode?: boolean;
 } = {}) {
+  const Wrapper = strictMode ? StrictMode : Fragment;
   return render(
-    <ThemeProvider theme={theme}>
-      <StateProvider>
-        <MemoryRouter initialEntries={[initialEntry]}>
-          <Routes>
-            <Route
-              path={routePath}
-              element={<GameScreen replayMode={replayMode} />}
-            />
-          </Routes>
-        </MemoryRouter>
-        <StateIndexProbe />
-      </StateProvider>
-    </ThemeProvider>
+    <Wrapper>
+      <ThemeProvider theme={theme}>
+        <StateProvider>
+          <MemoryRouter initialEntries={[initialEntry]}>
+            <Routes>
+              <Route
+                path={routePath}
+                element={<GameScreen replayMode={replayMode} />}
+              />
+            </Routes>
+          </MemoryRouter>
+          <StateIndexProbe />
+        </StateProvider>
+      </ThemeProvider>
+    </Wrapper>
   );
 }
 
@@ -129,6 +134,27 @@ test("advances a persisted bot turn and publishes the returned state", async () 
   expect(screen.getByTestId("state-index")).toHaveTextContent("13");
   expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
   expect(dispatchSnackbar).toHaveBeenCalledOnce();
+});
+
+test("asks the server for one bot move at a time", async () => {
+  // StrictMode loads the game twice, so the state is set again while the bot
+  // thinks; a second request would have the server play the move twice.
+  const loads = [deferred<GameState>(), deferred<GameState>()];
+  vi.mocked(getState)
+    .mockReturnValueOnce(loads[0].promise)
+    .mockReturnValueOnce(loads[1].promise);
+  vi.mocked(postAction).mockReturnValue(deferred<GameState>().promise);
+
+  renderGameScreen({ strictMode: true });
+
+  for (const load of loads) {
+    await act(async () => {
+      load.resolve(makeGameState({ current_color: "RED" }));
+      await load.promise;
+    });
+  }
+  expect(getState).toHaveBeenCalledTimes(2);
+  expect(postAction).toHaveBeenCalledOnce();
 });
 
 test("loads a historical state without advancing bots in replay mode", async () => {
