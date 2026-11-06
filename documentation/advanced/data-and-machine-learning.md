@@ -13,7 +13,7 @@ Using the CLI you can generate data, suitable for Machine Learning and Data Anal
 With `--output-format csv` you can generate the CSVs like so:
 
 ```bash
-catanatron-play --num 5 --players F,F,R,R --output data/ --output-format csv
+catanatron-play --num 5 --players F,R --output data/ --output-format csv
 ```
 
 This generates 4 GZIP CSVs:

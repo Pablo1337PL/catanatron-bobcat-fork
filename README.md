@@ -53,7 +53,7 @@ Catanatron provides a `catanatron-play` CLI tool to run large scale simulations.
 Run simulations and generate datasets via the CLI:
 
 ```bash
-catanatron-play --players=R,R,R,W --num=100
+catanatron-play --players=R,W --num=100
 ```
 
 Generate datasets from the games to analyze:

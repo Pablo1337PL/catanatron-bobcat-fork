@@ -122,13 +122,13 @@ class PlayerRegistry(dict):
         """Build the players for one game.
 
         Unlike the old ``parse_cli_string``, an unrecognized key raises rather
-        than silently dropping the player.
+        than silently dropping the player. Games are 1v1, so exactly two specs.
         """
         if isinstance(specs, str):
             specs = [s for s in specs.split(",") if s.strip()]
         specs = list(specs)
-        if not 2 <= len(specs) <= 4:
-            raise SpecError(f"a game needs 2 to 4 players, got {len(specs)}")
+        if len(specs) != 2:
+            raise SpecError(f"a game needs exactly 2 players, got {len(specs)}")
         return [self.build(spec, color) for spec, color in zip(specs, colors or Color)]
 
     def spec_of(self, player: Player) -> dict:

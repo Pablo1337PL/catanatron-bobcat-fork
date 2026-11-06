@@ -11,7 +11,7 @@ icon: bullseye-arrow
 After installing Catanatron, you should have access to the `catanatron-play` CLI. To run your first simulation run:
 
 ```bash
-catanatron-play --players=R,R,R,W --num=100
+catanatron-play --players=R,W --num=100
 ```
 
 For more information type:

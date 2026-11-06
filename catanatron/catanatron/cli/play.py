@@ -58,8 +58,9 @@ class CustomTimeRemainingColumn(TimeRemainingColumn):
     "--players",
     default="R,R,R,R",
     help="""
-    Comma-separated players to use. Append ':' params, positionally or by
-    name (e.g. --players=R,G:25,AB:2:contender,W or AB:depth=2).\n
+    Comma-separated players to use, exactly two (games are 1v1). Append ':'
+    params, positionally or by name (e.g. --players=G:25,AB:2:contender or
+    AB:depth=2).\n
     See player legend with '--help-players'.
     """,
 )
@@ -137,8 +138,8 @@ class CustomTimeRemainingColumn(TimeRemainingColumn):
 @click.option(
     "--config-map",
     default="BASE",
-    type=click.Choice(["BASE", "MINI", "TOURNAMENT"], case_sensitive=False),
-    help="Sets Map to use. MINI is a 7-tile smaller version. TOURNAMENT uses a fixed balanced map.",
+    type=click.Choice(["BASE", "TOURNAMENT"], case_sensitive=False),
+    help="Sets Map to use. TOURNAMENT uses a fixed balanced map.",
 )
 @click.option(
     "--config-number-placement",
@@ -189,11 +190,11 @@ def simulate(
     and test bot strategies against each other.
 
     Examples:\n\n
-        catanatron-play --players R,R,R,R --num 1000\n
-        catanatron-play --players W,W,R,R --num 50000 --output data/ --output-format csv\n
+        catanatron-play --players R,R --num 1000\n
+        catanatron-play --players W,R --num 50000 --output data/ --output-format csv\n
         catanatron-play --players VP,F --num 10 --output data/ --ouput-format json\n
-        catanatron-play --players W,F,AB:3 --num 1 --ouput-format csv --db --quiet\n
-        catanatron-play --bot ./mybot.py --players R,R,R,MyBot --num 10
+        catanatron-play --players F,AB:3 --num 1 --ouput-format csv --db --quiet\n
+        catanatron-play --bot ./mybot.py --players R,MyBot --num 10
     """
     for declaration in bots:
         name, separator, source = declaration.partition("=")
@@ -258,14 +259,14 @@ class OutputOptions:
 class GameConfigOptions:
     discard_limit: int = 7
     vps_to_win: int = 10
-    map_type: Literal["BASE", "TOURNAMENT", "MINI"] = "BASE"
+    map_type: Literal["BASE", "TOURNAMENT"] = "BASE"
     number_placement: NumberPlacement = "official_spiral"
     friendly_robber: bool = False
 
     def __post_init__(self):
         if self.number_placement == "official_spiral" and self.map_type == "TOURNAMENT":
             raise ValueError(
-                "official_spiral number placement is only supported for base or mini maps"
+                "official_spiral number placement is only supported for the base map"
             )
 
 

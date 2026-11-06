@@ -89,16 +89,13 @@ def my_reward_function(game, p0_color):
         return -100
 
 
-# 3-player catan on a "Mini" map (7 tiles) until 6 points.
+# 1v1 catan on the fixed TOURNAMENT map until 6 points.
 env = gymnasium.make(
     "catanatron.gym/Catanatron-v0",
     config={
-        "map_type": "MINI",
+        "map_type": "TOURNAMENT",
         "vps_to_win": 6,
-        "enemies": [
-            WeightedRandomPlayer(Color.RED),
-            WeightedRandomPlayer(Color.ORANGE),
-        ],
+        "enemies": [WeightedRandomPlayer(Color.RED)],
         "reward_function": my_reward_function,
         "representation": "mixed",
     },

@@ -37,7 +37,6 @@ from catanatron.models.enums import (
 )
 from catanatron.models.map import (
     BASE_MAP_TEMPLATE,
-    MINI_MAP_TEMPLATE,
     CatanMap,
     LandTile,
     Port,
@@ -53,7 +52,7 @@ from catanatron.state_functions import get_longest_road_length
 #: what defines the game.
 SCHEMA_VERSION = 2
 
-MAP_TEMPLATES = {"BASE": BASE_MAP_TEMPLATE, "MINI": MINI_MAP_TEMPLATE}
+MAP_TEMPLATES = {"BASE": BASE_MAP_TEMPLATE}
 
 
 # ===== map =====

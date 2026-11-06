@@ -99,7 +99,7 @@ def test_unknown_key_is_rejected(registry):
 def test_unknown_key_is_not_silently_dropped(registry):
     """The old parse_cli_string returned a short player list instead."""
     with pytest.raises(SpecError):
-        registry.build_all("EX,EX,NOPE")
+        registry.build_all("EX,NOPE")
 
 
 def test_bad_params_surface_as_a_spec_error(registry):
@@ -108,13 +108,13 @@ def test_bad_params_surface_as_a_spec_error(registry):
 
 
 def test_build_all_assigns_colors_in_order():
-    players = REGISTRY.build_all("R,W,AB:2")
-    assert [p.color for p in players] == [Color.RED, Color.BLUE, Color.ORANGE]
+    players = REGISTRY.build_all("W,AB:2")
+    assert [p.color for p in players] == [Color.RED, Color.BLUE]
 
 
-@pytest.mark.parametrize("specs", ["R", "R,R,R,R,R"])
+@pytest.mark.parametrize("specs", ["R", "R,R,R", "R,R,R,R"])
 def test_build_all_rejects_bad_player_counts(specs):
-    with pytest.raises(SpecError, match="2 to 4 players"):
+    with pytest.raises(SpecError, match="exactly 2 players"):
         REGISTRY.build_all(specs)
 
 

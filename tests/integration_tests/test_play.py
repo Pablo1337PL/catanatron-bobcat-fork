@@ -1,6 +1,7 @@
 import os
 import tempfile
 
+import pytest
 from click.testing import CliRunner
 import pandas as pd
 
@@ -9,22 +10,29 @@ from catanatron.cli.play import simulate
 
 def test_play():
     runner = CliRunner()
-    result = runner.invoke(simulate, ["--num=5", "--players=R,F,VP,W"])
+    result = runner.invoke(simulate, ["--num=5", "--players=R,F"])
     assert result.exit_code == 0
     assert "Game Summary" in result.output
 
 
-def test_play_strong():
+@pytest.mark.parametrize(
+    "players", ["AB,SAB", "M:num_simulations=2:prunning=true,G:num_playouts=2"]
+)
+def test_play_strong(players):
     runner = CliRunner()
+    # A short game: 1v1 search bots decide every move, so 10 VP would take a minute
     result = runner.invoke(
-        simulate,
-        [
-            "--num=1",
-            "--players=AB,SAB,M:num_simulations=2:prunning=true,G:num_playouts=2",
-        ],
+        simulate, ["--num=1", f"--players={players}", "--config-vps-to-win=4"]
     )
     assert result.exit_code == 0
     assert "Game Summary" in result.output
+
+
+def test_play_is_1v1():
+    runner = CliRunner()
+    result = runner.invoke(simulate, ["--num=1", "--players=R,F,VP,W"])
+    assert result.exit_code != 0
+    assert "exactly 2 players" in result.output
 
 
 def test_play_with_random_number_placement():

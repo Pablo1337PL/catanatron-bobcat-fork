@@ -16,7 +16,7 @@ from catanatron.registry import REGISTRY, describe, SpecError
 from catanatron.web.players import register_web_players
 
 bp = Blueprint("api", __name__, url_prefix="/api")
-VALID_MAP_TEMPLATES = {"BASE", "MINI", "TOURNAMENT"}
+VALID_MAP_TEMPLATES = {"BASE", "TOURNAMENT"}
 
 register_web_players()
 
@@ -68,14 +68,14 @@ def post_game_endpoint():
         abort(400, description="Missing or invalid JSON body: 'players' key required")
 
     player_keys = request.json["players"]
-    if not isinstance(player_keys, list) or not 2 <= len(player_keys) <= 4:
-        abort(400, description="'players' must be a list with 2 to 4 entries")
+    if not isinstance(player_keys, list) or len(player_keys) != 2:
+        abort(400, description="'players' must be a list with exactly 2 entries")
 
     map_template = _setting("map_template") or "BASE"
     if map_template not in VALID_MAP_TEMPLATES:
         abort(
             400,
-            description="'map_template' must be one of BASE, MINI, or TOURNAMENT",
+            description="'map_template' must be BASE or TOURNAMENT",
         )
 
     rules = {

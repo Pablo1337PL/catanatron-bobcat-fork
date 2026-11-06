@@ -25,7 +25,7 @@ class MyBot(Player):
 Point `--bot` at it. The bot is named after its class:
 
 ```bash
-catanatron-play --bot ./mybot.py --players=R,R,R,MyBot --num=100
+catanatron-play --bot ./mybot.py --players=R,MyBot --num=100
 ```
 
 `--bot` is repeatable, takes an optional `NAME=` prefix, and the file can live
@@ -96,7 +96,7 @@ per line over its stdin and stdout:
 
 ```bash
 catanatron-play --bot MYBOT=exec:"python examples/stdio_bot.py" \
-    --players=R,R,R,MYBOT
+    --players=R,MYBOT
 ```
 
 | catanatron sends | you reply |

@@ -3,7 +3,7 @@
 Run it with::
 
     catanatron-play --bot MYBOT=exec:"python examples/stdio_bot.py" \
-        --players=R,R,R,MYBOT --num=5
+        --players=R,MYBOT --num=5
 
 It happens to be Python, but nothing here imports catanatron: the protocol is
 JSON on stdin and stdout, so the same shape works in any language.

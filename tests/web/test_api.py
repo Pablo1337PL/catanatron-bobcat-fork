@@ -5,6 +5,7 @@ import threading
 import pytest
 import json
 from catanatron import Color, Game, RandomPlayer
+from catanatron.models.map import TOURNAMENT_MAP
 from catanatron.serialization import SCHEMA_VERSION, state_to_json
 from catanatron.web import api, create_app
 from catanatron.web.models import (
@@ -64,7 +65,7 @@ def test_post_game_endpoint_accepts_custom_config(client):
         "/api/games",
         json={
             "players": ["W", "CATANATRON"],
-            "map_template": "MINI",
+            "map_template": "TOURNAMENT",
             "vps_to_win": 15,
             "discard_limit": 12,
             "friendly_robber": True,
@@ -76,14 +77,10 @@ def test_post_game_endpoint_accepts_custom_config(client):
     with client.application.app_context():
         game = get_game_state(data["game_id"])
         assert game.friendly_robber is True
-
-    state_response = client.get(f"/api/games/{data['game_id']}/states/latest")
-    assert state_response.status_code == 200
-    state_data = json.loads(state_response.data)
-    land_tiles = [
-        tile for tile in state_data["tiles"] if tile["tile"]["type"] != "WATER"
-    ]
-    assert len(land_tiles) == 7
+        tiles = game.state.board.map.land_tiles
+        assert {c: t.number for c, t in tiles.items()} == {
+            c: t.number for c, t in TOURNAMENT_MAP.land_tiles.items()
+        }
 
 
 def test_post_game_endpoint_rejects_invalid_config(client):
@@ -96,6 +93,19 @@ def test_post_game_endpoint_rejects_invalid_config(client):
             "discard_limit": 2,
         },
     )
+    assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"players": ["R", "R", "R"]},
+        {"players": ["R", "R", "R", "R"]},
+        {"players": ["R", "R"], "map_template": "MINI"},
+    ],
+)
+def test_post_game_endpoint_is_1v1_on_the_base_board(client, body):
+    response = client.post("/api/games", json=body)
     assert response.status_code == 400
 
 

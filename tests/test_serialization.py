@@ -144,7 +144,7 @@ def test_round_trip_preserves_game_config():
     assert hydrated.seed == game.seed
 
 
-@pytest.mark.parametrize("map_type", ["BASE", "MINI", "TOURNAMENT"])
+@pytest.mark.parametrize("map_type", ["BASE", "TOURNAMENT"])
 def test_round_trip_preserves_map(map_type):
     game, players = played_game(ticks=60, map_type=map_type)
     hydrated, _ = round_trip(game, players)
@@ -194,18 +194,18 @@ def test_round_trip_with_parameterized_bots():
 
 def test_players_come_from_specs_not_from_the_document():
     """A document describes a game, never the code that plays it."""
-    game, _ = played_game(ticks=30)
+    game, _ = played_game(
+        ticks=30, players=[RandomPlayer(Color.RED), RandomPlayer(Color.BLUE)]
+    )
     doc = json.loads(json.dumps(state_to_json(game)))
     assert "players" not in doc
 
-    specs = ["R", "W", "AB:depth=2", "VP"]
+    specs = ["W", "AB:depth=2"]
     rebuilt_players = REGISTRY.build_all(specs, colors=game.state.colors)
     hydrated = state_from_json(doc, rebuilt_players)
     assert [type(p).__name__ for p in hydrated.state.players] == [
-        "RandomPlayer",
         "WeightedRandomPlayer",
         "AlphaBetaPlayer",
-        "VictoryPointPlayer",
     ]
     assert hydrated.state.colors == game.state.colors
 

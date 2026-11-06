@@ -123,7 +123,7 @@ def resource_hand_features(game: Game, p0_color: Color):
     return features
 
 
-@functools.lru_cache(NUM_TILES * 2)  # one for each robber, and acount for Minimap
+@functools.lru_cache(NUM_TILES * 2)  # one for each robber position
 def map_tile_features(catan_map: CatanMap, robber_coordinate):
     # Returns list of functions that take a game and output a feature.
     # build features like tile0_is_wood, tile0_is_wheat, ..., tile0_proba, tile0_hasrobber
@@ -529,7 +529,7 @@ def create_sample_vector(game, p0_color, features=None):
 
 @functools.lru_cache(4 * 3)
 def get_feature_ordering(
-    num_players=4, map_type: Literal["BASE", "MINI", "TOURNAMENT"] = "BASE"
+    num_players=4, map_type: Literal["BASE", "TOURNAMENT"] = "BASE"
 ):
     players = [
         SimplePlayer(Color.RED),

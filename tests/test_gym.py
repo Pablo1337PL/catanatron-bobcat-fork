@@ -104,14 +104,6 @@ def test_custom_reward():
     assert reward == 123
 
 
-def test_custom_map():
-    env = gymnasium.make("catanatron/Catanatron-v0", config={"map_type": "MINI"})
-    observation, info = env.reset()
-    assert len(info["valid_actions"]) < 50
-    assert len(observation) < 614
-    # assert env.action_space.n == 260
-
-
 def test_enemies():
     env = gymnasium.make(
         "catanatron/Catanatron-v0",
@@ -183,24 +175,6 @@ def test_there_are_54_build_nodes_in_base():
         [action for action in action_array if action[0] == ActionType.BUILD_SETTLEMENT]
     )
     assert num_build_nodes == 54
-
-
-def test_there_are_less_build_nodes_in_mini():
-    player_colors = (Color.BLUE, Color.RED)
-    action_array = get_action_array(player_colors, "MINI")
-    num_build_nodes = len(
-        [action for action in action_array if action[0] == ActionType.BUILD_SETTLEMENT]
-    )
-    assert num_build_nodes == 24
-
-
-def test_outside_tiles_not_in_mini():
-    player_colors = (Color.BLUE, Color.RED)
-    action_array = get_action_array(player_colors, "MINI")
-    target_action = (ActionType.MOVE_ROBBER, ((0, 2, -2), Color.BLUE))
-    assert (
-        target_action not in action_array
-    ), f"Action {target_action} found in MINI action array for 2 players"
 
 
 def test_action_space_conversion_roundtrip():

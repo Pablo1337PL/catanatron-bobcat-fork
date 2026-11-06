@@ -9,7 +9,7 @@ icon: square-terminal
 *   Run 1,000 games with Random Players
 
     ```bash
-    catanatron-play --num 1000 --players R,R,R,R 
+    catanatron-play --num 1000 --players R,R 
     ```
 *   Run 10 1v1 games between VictoryPointPlayer and ValueFunctionPlayer
 
@@ -19,7 +19,7 @@ icon: square-terminal
 *   Pit 3-player Catan with basically no discard limit
 
     ```bash
-    catanatron-play --num 1 --players W,F,AB:2 --config-discard-limit 999
+    catanatron-play --num 1 --players F,AB:2 --config-discard-limit 999
     ```
 *   Play 1v1 against ValueFunctionPlayer until 15 points with discard limit set to 9 (would not recommend :sweat\_smile:; its much better to play using the GUI)
 
@@ -52,7 +52,7 @@ You can save the output of games using the `--output` and `--output-format` flag
 #### JSON Format
 
 ```bash
-catanatron-play --num 5 --players F,F,R,R --output data/ --output-format json
+catanatron-play --num 5 --players F,R --output data/ --output-format json
 ```
 
 Inspecting the `data` directory you should see all 5 games.

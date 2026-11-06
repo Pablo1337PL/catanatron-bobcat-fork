@@ -86,3 +86,13 @@ test("seeds are sent, invalid ones block the start", async () => {
   fireEvent.change(screen.getByLabelText("Dice"), { target: { value: "7" } });
   expect((await start()).seeds).toEqual({ seed: null, boardSeed: 100, diceSeed: 7 });
 });
+
+test("offers two fixed seats on the base or tournament board", async () => {
+  renderPage(["HUMAN", "BOBCAT"]);
+  await screen.findByText("BOBCAT");
+  expect(screen.queryByRole("button", { name: "Add Player" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Remove" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "MINI" })).toBeNull();
+  fireEvent.click(screen.getByRole("button", { name: "TOURNAMENT" }));
+  expect((await start()).mapTemplate).toBe("TOURNAMENT");
+});

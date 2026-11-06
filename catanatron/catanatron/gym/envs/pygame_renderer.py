@@ -15,7 +15,7 @@ from catanatron.game import Game
 
 
 # Base constants (scale with render_scale)
-HEX_SIZE = 70  # pixels (balanced for both MINI and BASE maps)
+HEX_SIZE = 70  # pixels
 SCREEN_WIDTH = 1000
 SCREEN_HEIGHT = 800
 ROAD_WIDTH = 8  # Scaled proportionally

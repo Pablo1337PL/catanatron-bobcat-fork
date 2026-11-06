@@ -25,7 +25,7 @@ class ReinforcementLearningAccumulator(GameAccumulator):
     def __init__(
         self,
         player_colors: Tuple[Color],
-        map_type: Literal["BASE", "TOURNAMENT", "MINI"] = "BASE",
+        map_type: Literal["BASE", "TOURNAMENT"] = "BASE",
         include_board_tensor=True,
         total_return_fns={
             "RETURN": simple_total_return,
@@ -142,7 +142,7 @@ class CsvDataAccumulator(ReinforcementLearningAccumulator):
     def __init__(
         self,
         player_colors: Tuple[Color],
-        map_type: Literal["BASE", "TOURNAMENT", "MINI"],
+        map_type: Literal["BASE", "TOURNAMENT"],
         output,
         include_board_tensor=True,
     ):
@@ -182,7 +182,7 @@ class ParquetDataAccumulator(ReinforcementLearningAccumulator):
     def __init__(
         self,
         player_colors: Tuple[Color],
-        map_type: Literal["BASE", "TOURNAMENT", "MINI"],
+        map_type: Literal["BASE", "TOURNAMENT"],
         output,
         include_board_tensor=True,
     ):

@@ -19,9 +19,10 @@ def _make_client(analyzer=None):
     return app.test_client()
 
 
-def _new_game(client):
+def _new_game(client, **rules):
     response = client.post(
-        "/api/games", json={"players": ["R", "R"], "seed": 1, "board_seed": 1, "dice_seed": 1},
+        "/api/games",
+        json={"players": ["R", "R"], "seed": 1, "board_seed": 1, "dice_seed": 1, **rules},
     )
     return response.get_json()["game_id"]
 
@@ -87,7 +88,8 @@ def test_the_analyzer_cannot_change_the_stored_game():
 def test_a_finished_game_is_not_analyzed():
     analyzer = FakeAnalyzer()
     client = _make_client(analyzer)
-    game_id = _new_game(client)
+    # 3 points: random players finish well before the turn limit (no draw)
+    game_id = _new_game(client, vps_to_win=3)
     with client.application.app_context():
         game = get_game_state(game_id)
         game.play()

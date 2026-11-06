@@ -26,7 +26,7 @@ export type PlayerEntry = {
   params: PlayerParam[];
 };
 
-export type MapTemplate = "BASE" | "MINI" | "TOURNAMENT";
+export type MapTemplate = "BASE" | "TOURNAMENT";
 export type StateIndex = number | `${number}` | "latest";
 
 /** Seeds of a new game; null (or missing) means random. */

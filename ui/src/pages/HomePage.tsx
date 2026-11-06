@@ -24,8 +24,9 @@ import {
 
 import "./HomePage.scss";
 
-const MAP_TEMPLATES: MapTemplate[] = ["BASE", "MINI", "TOURNAMENT"];
-const PLAYER_COLORS = ["RED", "BLUE", "ORANGE", "WHITE"] as const;
+const MAP_TEMPLATES: MapTemplate[] = ["BASE", "TOURNAMENT"];
+/** Games are 1v1: two seats, in this order unless the seats are random. */
+const PLAYER_COLORS = ["RED", "BLUE"] as const;
 /** Default opponent of the Human: the first of these the server offers. */
 const PREFERRED_OPPONENTS: PlayerKey[] = ["BOBCAT", "CATANATRON"];
 const DEFAULT_PLAYERS: PlayerKey[] = ["HUMAN", "CATANATRON"];
@@ -110,27 +111,8 @@ export default function HomePage() {
     );
   };
 
-  const handleAddPlayer = () => {
-    setPlayers((current) =>
-      current.length >= 4 ? current : [...current, "WEIGHTED_RANDOM"]
-    );
-  };
-
-  /** Swaps the seats of players `index` and `index + 1`. */
-  const handleSwapPlayers = (index: number) => {
-    setPlayers((current) => {
-      const next = [...current];
-      [next[index], next[index + 1]] = [next[index + 1], next[index]];
-      return next;
-    });
-  };
-
-  const handleRemovePlayer = (index: number) => {
-    setPlayers((current) =>
-      current.length <= 2
-        ? current
-        : current.filter((_, playerIndex) => playerIndex !== index)
-    );
+  const handleSwapPlayers = () => {
+    setPlayers((current) => [...current].reverse());
   };
 
   const handleCreateGame = async () => {
@@ -248,7 +230,7 @@ export default function HomePage() {
             <div className="control-group">
               <div className="control-header">
                 <span>Players</span>
-                <strong>{players.length}/4</strong>
+                <strong>1v1</strong>
               </div>
               <label className="seat-option">
                 <Checkbox
@@ -317,25 +299,17 @@ export default function HomePage() {
                         </MenuItem>
                       ))}
                     </Select>
-                    <Button
-                      variant="text"
-                      className="remove-player-btn"
-                      disabled={players.length <= 2}
-                      onClick={() => handleRemovePlayer(index)}
-                    >
-                      Remove
-                    </Button>
                   </div>
-                  {index < players.length - 1 && (
+                  {index === 0 && (
                     <div className="swap-row">
-                      <Tooltip title={`Swap seats ${index + 1} and ${index + 2}`}>
+                      <Tooltip title="Swap seats 1 and 2">
                         <span>
                           <IconButton
                             size="small"
                             className="swap-button"
-                            aria-label={`Swap seats ${index + 1} and ${index + 2}`}
+                            aria-label="Swap seats 1 and 2"
                             disabled={randomSeats}
-                            onClick={() => handleSwapPlayers(index)}
+                            onClick={handleSwapPlayers}
                           >
                             <SwapVertRoundedIcon fontSize="small" />
                           </IconButton>
@@ -346,15 +320,6 @@ export default function HomePage() {
                   </Fragment>
                 ))}
               </div>
-
-              <Button
-                variant="contained"
-                className="add-player-btn"
-                disabled={players.length >= 4}
-                onClick={handleAddPlayer}
-              >
-                Add Player
-              </Button>
             </div>
 
             <div className="control-group">

@@ -20,7 +20,7 @@ You can also (in a new terminal window) install the `[web]` subpackage and use t
 
 ```bash
 pip install .[web]
-catanatron-play --players=W,W,W,W --db --num=1
+catanatron-play --players=W,W --db --num=1
 ```
 
 The link should be printed in the console.

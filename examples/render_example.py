@@ -43,8 +43,8 @@ def main():
         "--map-type",
         type=str,
         default="BASE",
-        choices=["BASE", "MINI"],
-        help="Map type to use (default: MINI)",
+        choices=["BASE", "TOURNAMENT"],
+        help="Map type to use (default: BASE)",
     )
     parser.add_argument(
         "--vps-to-win",
