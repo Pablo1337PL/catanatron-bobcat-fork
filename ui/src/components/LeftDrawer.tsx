@@ -8,11 +8,20 @@ import Button from "@mui/material/Button";
 
 import Hidden from "./Hidden";
 import PlayerStateBox from "./PlayerStateBox";
-import { humanizeActionRecord } from "../utils/promptUtils";
-import { store } from "../store";
+import {
+  formatDuration,
+  formatResourceChange,
+  humanizeActionRecord,
+  moveDuration,
+} from "../utils/promptUtils";
+import { displayedGameState, store } from "../store";
 import ACTIONS from "../actions";
 import { getHumanColor, playerKey } from "../utils/stateUtils";
-import { type GameState } from "../utils/api.types";
+import {
+  type ActionDetails,
+  type GameActionRecord,
+  type GameState,
+} from "../utils/api.types";
 import { isTabOrShift, type InteractionEvent } from "../utils/events";
 
 import "./LeftDrawer.scss";
@@ -71,7 +80,99 @@ function SeedsInfo({ gameState }: { gameState: GameState }) {
   );
 }
 
-function DrawerContent({ gameState }: { gameState: GameState }) {
+/** What a roll paid to each seat, e.g. "RED +2 WHEAT · BLUE nothing". */
+function RollPayout({
+  colors,
+  details,
+}: {
+  colors: GameState["colors"];
+  details: ActionDetails | undefined;
+}) {
+  const changes = details?.resource_changes;
+  if (!changes) {
+    return null;
+  }
+  return (
+    <span className="roll-payout">
+      {colors.map((color) => (
+        <span key={color} className="payout">
+          <span className={cn("payout-color", color.toLowerCase())}>
+            {color}
+          </span>{" "}
+          {changes[color] ? formatResourceChange(changes[color]) : "nothing"}
+        </span>
+      ))}
+    </span>
+  );
+}
+
+function formatClock(unixSeconds: number) {
+  return new Date(unixSeconds * 1000).toLocaleTimeString([], {
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+function LogEntry({
+  gameState,
+  index,
+  viewed,
+  onSelect,
+}: {
+  gameState: GameState;
+  index: number;
+  viewed: boolean;
+  onSelect?: (stateIndex: number) => void;
+}) {
+  const actionRecord = gameState.action_records[index] as GameActionRecord;
+  const details = gameState.action_details?.[index];
+  const duration = moveDuration(gameState, index);
+  const isRoll = actionRecord[0][1] === "ROLL";
+  const rolledSeven =
+    isRoll && (actionRecord[1] as [number, number]).reduce((a, b) => a + b) === 7;
+  const time = details?.played_at
+    ? `Played at ${formatClock(details.played_at)}`
+    : undefined;
+
+  return (
+    <button
+      type="button"
+      className={cn("action foreground", actionRecord[0][0], { viewed })}
+      disabled={!onSelect}
+      title={onSelect ? "Show the board after this move" : undefined}
+      onClick={() => onSelect?.(index + 1)}
+    >
+      <span className="action-main">
+        <span className="action-text">
+          {humanizeActionRecord(gameState, actionRecord, details)}
+        </span>
+        {duration !== null && (
+          <span className="action-time" title={time}>
+            {formatDuration(duration)}
+          </span>
+        )}
+      </span>
+      {isRoll && !rolledSeven && (
+        <RollPayout colors={gameState.colors} details={details} />
+      )}
+    </button>
+  );
+}
+
+function DrawerContent({
+  gameState,
+  logState,
+  onSelectState,
+}: {
+  /** The state the players' boxes show: the live one or one picked in the log. */
+  gameState: GameState;
+  /** The live game, whose whole log is listed. */
+  logState: GameState;
+  onSelectState?: (stateIndex: number) => void;
+}) {
+  const viewedIndex =
+    gameState === logState ? null : gameState.state_index;
   const playerSections = gameState.colors.map((color) => {
     const key = playerKey(gameState, color);
     return (
@@ -92,24 +193,37 @@ function DrawerContent({ gameState }: { gameState: GameState }) {
       <SeedsInfo gameState={gameState} />
       {playerSections}
       <div className="log">
-        {gameState.action_records
-          .slice()
-          .reverse()
-          .map((actionRecord, i) => (
-            <div
-              key={i}
-              className={cn("action foreground", actionRecord[0][0])}
-            >
-              {humanizeActionRecord(gameState, actionRecord)}
-            </div>
-          ))}
+        {logState.action_records
+          .map((_, index) => (
+            <LogEntry
+              key={index}
+              gameState={logState}
+              index={index}
+              viewed={viewedIndex === index + 1}
+              onSelect={onSelectState}
+            />
+          ))
+          .reverse()}
       </div>
     </>
   );
 }
 
-export default function LeftDrawer() {
+export default function LeftDrawer({
+  onSelectState,
+}: {
+  /** Called with the state index after a clicked log entry; without it the
+   * log is not clickable. */
+  onSelectState?: (stateIndex: number) => void;
+}) {
   const { state, dispatch } = useContext(store);
+  const content = (
+    <DrawerContent
+      gameState={displayedGameState(state) as GameState}
+      logState={state.gameState as GameState}
+      onSelectState={onSelectState}
+    />
+  );
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
   const openLeftDrawer = useCallback(
@@ -146,7 +260,7 @@ export default function LeftDrawer() {
           disableDiscovery={iOS}
           onKeyDown={closeLeftDrawer}
         >
-          <DrawerContent gameState={state.gameState as GameState} />
+          {content}
         </SwipeableDrawer>
       </Hidden>
       <Hidden
@@ -154,7 +268,7 @@ export default function LeftDrawer() {
         implementation="css"
       >
         <Drawer className="left-drawer" anchor="left" variant="permanent" open>
-          <DrawerContent gameState={state.gameState as GameState} />
+          {content}
         </Drawer>
       </Hidden>
     </>

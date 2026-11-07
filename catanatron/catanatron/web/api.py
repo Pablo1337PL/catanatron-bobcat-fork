@@ -5,9 +5,15 @@ import threading
 
 from flask import Response, Blueprint, current_app, jsonify, abort, request
 
-from catanatron.web.models import StaleGameError, upsert_game_state, get_game_state
+from catanatron.web.models import (
+    StaleGameError,
+    get_action_details,
+    get_game_state,
+    upsert_game_state,
+)
 from catanatron.serialization import action_from_json, web_view
 from catanatron.state_functions import get_state_index
+from catanatron.models.enums import ActionType
 from catanatron.models.player import Color
 from catanatron.game import Game
 from catanatron.models.map import build_map
@@ -140,13 +146,7 @@ def get_game_endpoint(game_id, state_index):
     game = get_game_state(game_id, parsed_state_index)
     if game is None:
         abort(404, description="Resource not found")
-
-    payload = json.dumps(web_view(game, _perspective(game)))
-    return Response(
-        response=payload,
-        status=200,
-        mimetype="application/json",
-    )
+    return _game_response(game)
 
 
 #: One move at a time per game in this process. Requests run in threads, and a
@@ -189,11 +189,7 @@ def _post_action(game_id):
     loaded_index = get_state_index(game.state)
 
     if game.winning_color() is not None:
-        return Response(
-            response=json.dumps(web_view(game, _perspective(game))),
-            status=200,
-            mimetype="application/json",
-        )
+        return _game_response(game)
 
     # TODO: remove `or body_is_empty` when fully implement actions in FE
     body_is_empty = (not request.data) or request.json is None or request.json == {}
@@ -213,11 +209,7 @@ def _post_action(game_id):
             )
         upsert_game_state(game, expected_index=loaded_index)
 
-    return Response(
-        response=json.dumps(web_view(game, _perspective(game))),
-        status=200,
-        mimetype="application/json",
-    )
+    return _game_response(game)
 
 
 @bp.route("/stress-test", methods=["GET"])
@@ -294,6 +286,29 @@ def analysis_endpoint(game_id, state_index):
 
     analysis["state_index"] = len(game.state.action_records)
     return jsonify(analysis)
+
+
+#: Actions whose effect on the hands everybody at the table sees: what a roll
+#: pays out and what a monopoly takes. A steal or a discard is private.
+PUBLIC_RESOURCE_CHANGES = {ActionType.ROLL, ActionType.PLAY_MONOPOLY}
+
+
+def _game_response(game):
+    """The web view of a stored game, plus when it was created and, aligned
+    with ``action_records``, ``action_details``: when each action was played
+    (Unix time, seconds, or null) and, for a roll or a monopoly, how it changed
+    the hands (``{"RED": {"WHEAT": 2}}``, or null where unknown)."""
+    view = web_view(game, _perspective(game))
+    history = get_action_details(game.id, len(game.state.action_records))
+    for record, details in zip(game.state.action_records, history["action_details"]):
+        if record.action.action_type not in PUBLIC_RESOURCE_CHANGES:
+            details["resource_changes"] = None
+    view.update(history)
+    return Response(
+        response=json.dumps(view),
+        status=200,
+        mimetype="application/json",
+    )
 
 
 def _json_error(status, error, message):

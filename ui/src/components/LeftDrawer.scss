@@ -33,7 +33,60 @@ $dark-divider: rgb(0 0 0 / 80%);
     scrollbar-width: thin;
     scrollbar-color: #454545 variables.$dark-gray;
     .action {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      width: 100%;
       padding: variables.$sm-gutter;
+      border: 0;
+      border-left: 3px solid transparent;
+      font: inherit;
+      text-align: left;
+      cursor: pointer;
+
+      &:hover:not(:disabled) {
+        background: rgb(255 255 255 / 6%);
+      }
+
+      &:disabled {
+        cursor: default;
+      }
+
+      &.viewed {
+        border-left-color: currentcolor;
+        background: rgb(255 255 255 / 12%);
+      }
+    }
+
+    .action-main {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+
+    .action-time {
+      flex-shrink: 0;
+      color: rgb(255 255 255 / 45%);
+      font-size: 0.7rem;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .roll-payout {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0 10px;
+      color: rgb(255 255 255 / 75%);
+      font-size: 0.72rem;
+    }
+
+    .payout-color {
+      font-weight: 700;
+
+      &.red { color: variables.$red; }
+      &.blue { color: variables.$blue; }
+      &.orange { color: variables.$orange; }
+      &.white { color: variables.$white; }
     }
   }
 }

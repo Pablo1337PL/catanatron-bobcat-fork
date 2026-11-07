@@ -1,4 +1,5 @@
 import type {
+  ActionDetails,
   GameAction,
   Tile,
   PlacedTile,
@@ -15,6 +16,7 @@ import type { GameState } from "./api.types";
 export function humanizeActionRecord(
   gameState: GameState,
   actionRecord: GameActionRecord,
+  details?: ActionDetails,
 ) {
   const botColors = gameState.bot_colors;
   const action = actionRecord[0];
@@ -46,7 +48,12 @@ export function humanizeActionRecord(
       return `${player} PLAYED ROAD BUILDING`;
     }
     case "PLAY_MONOPOLY": {
-      return `${player} MONOPOLIZED ${action[2]}`;
+      const changes = details?.resource_changes;
+      if (!changes) {
+        return `${player} MONOPOLIZED ${action[2]}`;
+      }
+      const taken = changes[action[0]]?.[action[2] as ResourceCard] ?? 0;
+      return `${player} MONOPOLIZED ${action[2]} (TOOK ${taken})`;
     }
     case "PLAY_YEAR_OF_PLENTY": {
       const action = actionRecord[0] as PlayYearOfPlentyAction;
@@ -76,6 +83,42 @@ export function humanizeActionRecord(
       throw new Error(`Unknown action type: ${action[1]}`);
   }
 }
+/** A hand change, e.g. "+2 WHEAT, +1 ORE". */
+export function formatResourceChange(
+  change: Partial<Record<ResourceCard, number>>,
+): string {
+  return Object.entries(change)
+    .map(([resource, count]) => `${count > 0 ? "+" : ""}${count} ${resource}`)
+    .join(", ");
+}
+
+/** How long a move took: "0.4 s", "12.3 s", "2:05", "1:02:05". */
+export function formatDuration(seconds: number): string {
+  if (seconds < 60) {
+    return `${seconds.toFixed(1)} s`;
+  }
+  const total = Math.round(seconds);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const [h, m, s] = [Math.floor(total / 3600), Math.floor(total / 60) % 60, total % 60];
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+}
+
+/**
+ * Seconds the player spent on action `index`: since the action before it, or
+ * since the game was created for the first one. null when a time is missing.
+ */
+export function moveDuration(gameState: GameState, index: number): number | null {
+  const playedAt = gameState.action_details?.[index]?.played_at;
+  const previous =
+    index === 0
+      ? gameState.created_at
+      : gameState.action_details?.[index - 1]?.played_at;
+  if (playedAt == null || previous == null) {
+    return null;
+  }
+  return Math.max(0, playedAt - previous);
+}
+
 /** The tiles around a node, e.g. "6-8-5". */
 function nodeString(gameState: GameState, nodeId: number): string {
   return gameState.adjacent_tiles[nodeId].map(getShortTileString).join("-");

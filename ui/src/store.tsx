@@ -4,6 +4,9 @@ import { type Color, type GameState } from "./utils/api.types";
 
 export type CatanState = {
   gameState: GameState | null; // TODO
+  /** An earlier state of the game, picked in the log; the board shows it
+   * instead of gameState until it is set back to null. */
+  viewedState: GameState | null;
   /** Whose eyes to see the table through. null watches as a spectator, with
    * every hand face up. */
   perspective: Color | null;
@@ -25,6 +28,7 @@ type ReducerAction = {
 
 const initialState: CatanState = {
   gameState: null,
+  viewedState: null,
   perspective: null,
   // UI
   isBuildingRoad: false,
@@ -72,6 +76,18 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
             isPlayingYearOfPlenty: false,
             isMovingRobber: false,
           };
+        case ACTIONS.SET_VIEWED_STATE:
+          return {
+            ...state,
+            viewedState: action.data,
+            // A half-made move belongs to the live board, not the past one.
+            isBuildingRoad: false,
+            isBuildingSettlement: false,
+            isBuildingCity: false,
+            isPlayingMonopoly: false,
+            isPlayingYearOfPlenty: false,
+            isMovingRobber: false,
+          };
         case ACTIONS.TOGGLE_BUILDING_ROAD:
           return { ...state, isBuildingRoad: !state.isBuildingRoad };
         case ACTIONS.SET_IS_BUILDING_SETTLEMENT:
@@ -104,4 +120,10 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
   return <Provider value={{ state, dispatch }}>{children}</Provider>;
 };
 
-export { store, StateProvider };
+/** The state the board shows: an earlier one picked in the log, else the
+ * live game. */
+function displayedGameState(state: CatanState): GameState | null {
+  return state.viewedState ?? state.gameState;
+}
+
+export { store, StateProvider, displayedGameState };

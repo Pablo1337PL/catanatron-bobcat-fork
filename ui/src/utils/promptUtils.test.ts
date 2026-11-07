@@ -5,9 +5,13 @@ import {
   findTileById,
   findTileByCoordinate,
   describeAction,
+  formatDuration,
+  formatResourceChange,
   humanizeActionRecord,
   humanizeTradeAction,
+  moveDuration,
 } from "./promptUtils";
+import { makeGameState } from "../test/fixtures";
 import type { GameState, GameAction, GameActionRecord } from "./api.types";
 
 describe("getTileString", () => {
@@ -244,6 +248,27 @@ describe("humanizeAction", () => {
     ).toBe("BOT MONOPOLIZED BRICK");
   });
 
+  test("PLAY_MONOPOLY action says how many cards it took", () => {
+    const details = {
+      played_at: 10,
+      resource_changes: { RED: { BRICK: 4 }, BLUE: { BRICK: -4 } },
+    };
+    expect(
+      humanizeActionRecord(
+        baseGameState,
+        [["RED", "PLAY_MONOPOLY", "BRICK"], null],
+        details
+      )
+    ).toBe("BOT MONOPOLIZED BRICK (TOOK 4)");
+    expect(
+      humanizeActionRecord(
+        baseGameState,
+        [["RED", "PLAY_MONOPOLY", "BRICK"], null],
+        { played_at: 10, resource_changes: {} }
+      )
+    ).toBe("BOT MONOPOLIZED BRICK (TOOK 0)");
+  });
+
   test("PLAY_YEAR_OF_PLENTY action with two resources", () => {
     expect(
       humanizeActionRecord(baseGameState, [
@@ -384,5 +409,38 @@ describe("describeAction", () => {
     ],
   ])("%j", (action, expected) => {
     expect(describeAction(gameState, action as GameAction)).toEqual(expected);
+  });
+});
+
+describe("move times and hand changes", () => {
+  test("formatResourceChange", () => {
+    expect(formatResourceChange({ WHEAT: 2, ORE: 1 })).toBe("+2 WHEAT, +1 ORE");
+    expect(formatResourceChange({ BRICK: -3 })).toBe("-3 BRICK");
+  });
+
+  test.each([
+    [0.42, "0.4 s"],
+    [12.34, "12.3 s"],
+    [125, "2:05"],
+    [3725, "1:02:05"],
+  ])("formatDuration(%s)", (seconds, expected) => {
+    expect(formatDuration(seconds)).toBe(expected);
+  });
+
+  test("moveDuration counts from the move before, or from the start", () => {
+    const state = makeGameState({
+      created_at: 100,
+      action_details: [
+        { played_at: 103.5, resource_changes: null },
+        { played_at: 110, resource_changes: null },
+        { played_at: null, resource_changes: null },
+        { played_at: 120, resource_changes: null },
+      ],
+    });
+    expect(moveDuration(state, 0)).toBe(3.5);
+    expect(moveDuration(state, 1)).toBe(6.5);
+    expect(moveDuration(state, 2)).toBeNull();
+    expect(moveDuration(state, 3)).toBeNull();
+    expect(moveDuration(makeGameState(), 0)).toBeNull();
   });
 });

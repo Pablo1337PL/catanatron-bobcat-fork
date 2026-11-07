@@ -81,6 +81,8 @@ export function makeGameState(
       P1_WOOD_IN_HAND: 2,
     },
     action_records: [],
+    action_details: [],
+    created_at: null,
     robber_coordinate: [0, 0, 0],
     current_discard_count: 0,
     nodes: {

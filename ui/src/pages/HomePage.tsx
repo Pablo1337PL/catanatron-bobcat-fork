@@ -14,6 +14,7 @@ import {
 import HelpOutlineRoundedIcon from "@mui/icons-material/HelpOutlineRounded";
 import SwapVertRoundedIcon from "@mui/icons-material/SwapVertRounded";
 import { GridLoader } from "react-spinners";
+import PageTabs from "../components/PageTabs";
 import {
   createGame,
   getPlayers,
@@ -138,6 +139,7 @@ export default function HomePage() {
     <div className="home-page">
       <div className="home-page__inner">
         <h1 className="logo">Catanatron</h1>
+        <PageTabs />
         {!loading ? (
           <div className="setup-card">
             <p className="setup-note">Open hands. Random discard choice.</p>

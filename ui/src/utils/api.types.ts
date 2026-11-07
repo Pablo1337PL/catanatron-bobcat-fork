@@ -67,6 +67,19 @@ export type GameAction =
   | EndTurnAction;
 
 export type PlayerState = any;
+
+/** How an action changed the hands: only the seats and resources that moved. */
+export type ResourceChanges = Partial<
+  Record<Color, Partial<Record<ResourceCard, number>>>
+>;
+
+/** What the server stored about one action, aligned with `action_records`. */
+export type ActionDetails = {
+  /** When the server saved it (Unix time in seconds); null if unknown. */
+  played_at: number | null;
+  /** Only for a roll (what it paid) or a monopoly (what it took); else null. */
+  resource_changes: ResourceChanges | null;
+};
 export type VictoryPointCard = "VICTORY_POINT";
 export type ResourceCard = "WOOD" | "BRICK" | "SHEEP" | "WHEAT" | "ORE";
 export type Building = "SETTLEMENT" | "CITY";
@@ -147,6 +160,12 @@ export type GameState = {
    * seeds reveal every future roll and draw, so they come once it is over.
    */
   seeds?: { board: number | null; game?: number; dice?: number | null };
+  /** When the game was created (Unix time in seconds); null if unknown.
+   * Missing from an older server. */
+  created_at?: number | null;
+  /** One entry per action record: when it was played and what it moved.
+   * Missing from an older server. */
+  action_details?: ActionDetails[];
 
   // Also present, from the state document itself.
   schema_version: number;

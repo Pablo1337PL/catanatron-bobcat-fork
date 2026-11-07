@@ -15,15 +15,23 @@ is at now, plus one small row per action. Earlier states are materialized by
 replaying the log onto the first document; the current one is read straight
 off the second, because that is what nearly every request asks for.
 
+Every row also says when it was written (Unix time, in seconds), so the time a
+seat spent on a move is the gap to the action before it, and every action
+saved on its own says how it changed each hand (see
+:func:`get_action_details`).
+
 **No migration**: this reads neither the old ``game_states`` table nor
-anything written before this change.
+anything written before this change. Columns added later are nullable and
+added to an existing database on start (:func:`add_missing_columns`).
 """
 
 import json
 import os
+import time
 from contextlib import contextmanager
 
 from catanatron.game import Game
+from catanatron.models.enums import RESOURCES
 from catanatron.models.player import Color
 from catanatron.registry import REGISTRY
 from catanatron.serialization import (
@@ -34,7 +42,17 @@ from catanatron.serialization import (
     state_to_json,
 )
 from catanatron.state_functions import get_state_index
-from sqlalchemy import Column, ForeignKey, Integer, MetaData, String, create_engine
+from sqlalchemy import (
+    Column,
+    Float,
+    ForeignKey,
+    Integer,
+    MetaData,
+    String,
+    create_engine,
+    inspect,
+    text,
+)
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import Session
@@ -70,6 +88,9 @@ class StoredGame(Base):
     #: recorded outcomes), and reading the latest state is what nearly every
     #: request wants, so it should not cost a replay of the whole game.
     head_state = Column(String, nullable=False)
+    #: When the game was first saved (Unix time, seconds); null before this
+    #: column existed.
+    created_at = Column(Float, nullable=True)
 
 
 class StoredAction(Base):
@@ -84,6 +105,13 @@ class StoredAction(Base):
     uuid = Column(String(64), ForeignKey("games.uuid"), primary_key=True)
     index = Column(Integer, primary_key=True)
     payload = Column(String, nullable=False)
+    #: When the action was saved (Unix time, seconds); null before this
+    #: column existed.
+    played_at = Column(Float, nullable=True)
+    #: How the action changed the hands, ``{"RED": {"WHEAT": 2}, ...}`` (only
+    #: seats and resources that changed), as JSON. Null when it is not known:
+    #: the action was saved together with others, or before this column.
+    resource_changes = Column(String, nullable=True)
 
 
 db = SQLAlchemy(metadata=metadata)
@@ -122,6 +150,7 @@ def upsert_game_state(game: Game, session_param=None, expected_index=None):
     moves the head backwards, with or without it.
     """
     session = session_param or db.session
+    now = time.time()
     head = get_state_index(game.state)
     document = json.dumps(state_to_json(game))
     # populate_existing: compare against the database, not this session's copy
@@ -148,9 +177,21 @@ def upsert_game_state(game: Game, session_param=None, expected_index=None):
             base_state=document,
             head_index=head,
             head_state=document,
+            created_at=now,
         )
         session.add(stored)
 
+    # The hands before a single new action are those of the previous head, so
+    # its effect is exact; a batch of actions cannot be told apart.
+    changes = None
+    if head - stored.head_index == 1:
+        before = json.loads(stored.head_state)
+        changes = json.dumps(
+            _hand_changes(
+                _hands(before["colors"], before["player_state"]),
+                _hands([c.value for c in game.state.colors], game.state.player_state),
+            )
+        )
     for index in range(stored.head_index, head):
         record = game.state.action_records[index]
         session.add(
@@ -158,6 +199,8 @@ def upsert_game_state(game: Game, session_param=None, expected_index=None):
                 uuid=game.id,
                 index=index,
                 payload=json.dumps(action_record_to_json(record)),
+                played_at=now,
+                resource_changes=changes,
             )
         )
 
@@ -222,3 +265,79 @@ def get_game_state(game_id, state_index=None) -> Game | None:
         record = action_record_from_json(json.loads(entry.payload))
         game.execute(record.action, validate_action=False, action_record=record)
     return game
+
+
+def get_action_details(game_id, state_index):
+    """When each of the first ``state_index`` actions was played, and how it
+    changed the hands.
+
+    Returns ``{"created_at": float | None, "action_details": [...]}``, with one
+    ``{"played_at": float | None, "resource_changes": dict | None}`` per
+    action, aligned with the game's ``action_records``. ``resource_changes``
+    includes private information (a steal, a discard), so filter it before
+    showing it to a seat.
+    """
+    session = db.session
+    stored = session.get(StoredGame, game_id)
+    if stored is None:
+        abort(404)
+    rows = (
+        session.query(
+            StoredAction.index, StoredAction.played_at, StoredAction.resource_changes
+        )
+        .filter(StoredAction.uuid == game_id, StoredAction.index < state_index)
+        .all()
+    )
+    details = [
+        {"played_at": None, "resource_changes": None} for _ in range(state_index)
+    ]
+    for index, played_at, changes in rows:
+        details[index] = {
+            "played_at": played_at,
+            "resource_changes": None if changes is None else json.loads(changes),
+        }
+    return {"created_at": stored.created_at, "action_details": details}
+
+
+def _hands(colors, player_state):
+    return {
+        color: [player_state[f"P{i}_{resource}_IN_HAND"] for resource in RESOURCES]
+        for i, color in enumerate(colors)
+    }
+
+
+def _hand_changes(before, after):
+    changes = {}
+    for color, hand in after.items():
+        delta = {
+            resource: count - previous
+            for resource, count, previous in zip(RESOURCES, hand, before[color])
+            if count != previous
+        }
+        if delta:
+            changes[color] = delta
+    return changes
+
+
+def add_missing_columns(engine):
+    """Add columns this module declares but an existing database lacks.
+
+    ``create_all`` creates missing tables but never alters existing ones. Only
+    nullable columns are added (rows written before them read as null), so
+    games saved by an older version stay playable.
+    """
+    inspector = inspect(engine)
+    with engine.begin() as connection:
+        for table in metadata.sorted_tables:
+            if not inspector.has_table(table.name):
+                continue
+            present = {column["name"] for column in inspector.get_columns(table.name)}
+            for column in table.columns:
+                if column.name in present or not column.nullable:
+                    continue
+                column_type = column.type.compile(dialect=engine.dialect)
+                connection.execute(
+                    text(
+                        f'ALTER TABLE {table.name} ADD COLUMN "{column.name}" {column_type}'
+                    )
+                )

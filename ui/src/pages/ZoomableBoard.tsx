@@ -6,7 +6,7 @@ import { useMediaQuery, useTheme } from "@mui/material";
 import useWindowSize from "../utils/useWindowSize";
 
 import "./Board.scss";
-import { store } from "../store";
+import { displayedGameState, store } from "../store";
 import { isPlayersTurn } from "../utils/stateUtils";
 import { postAction } from "../utils/apiClient";
 import type { CatanState } from "../store";
@@ -94,7 +94,7 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.up("md"));
   const [show, setShow] = useState(false);
-  const gameState = state.gameState
+  const gameState = displayedGameState(state);
   if (!gameState)
     throw new Error("GameState is not ready!");
   if (!gameId)

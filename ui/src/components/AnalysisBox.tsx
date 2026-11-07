@@ -11,7 +11,7 @@ import {
 } from "../utils/apiClient";
 import type { Color, GameState } from "../utils/api.types";
 import { describeAction } from "../utils/promptUtils";
-import { store } from "../store";
+import { displayedGameState, store } from "../store";
 
 import "./AnalysisBox.scss";
 
@@ -146,7 +146,7 @@ export default function AnalysisBox({ stateIndex }: AnalysisBoxProps) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [showAll, setShowAll] = useState(false);
-  const gameState = state.gameState;
+  const gameState = displayedGameState(state);
 
   const handleAnalyzeClick = async () => {
     if (!gameId || !gameState || gameState.winning_color) return;

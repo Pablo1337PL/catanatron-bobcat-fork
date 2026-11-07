@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useContext } from "react";
+import { useCallback, useEffect, useRef, useState, useContext } from "react";
 import { useParams } from "react-router-dom";
 import PropTypes from "prop-types";
 import { GridLoader } from "react-spinners";
@@ -21,6 +21,7 @@ import {
 import { dispatchSnackbar } from "../components/Snackbar";
 import { getHumanColor } from "../utils/stateUtils";
 import AnalysisBox from "../components/AnalysisBox";
+import HistoryBanner from "../components/HistoryBanner";
 import { Divider } from "@mui/material";
 
 const ROBOT_THINKING_TIME = 300;
@@ -31,6 +32,8 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [isBotThinking, setIsBotThinking] = useState(false);
   const botMoveInFlight = useRef(false);
+  // Only the latest click in the log may set the viewed state.
+  const viewRequest = useRef(0);
 
   // Load game state
   useEffect(() => {
@@ -46,6 +49,31 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
       dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
     })();
   }, [gameId, stateIndex, state.perspective, dispatch]);
+
+  // A state viewed from the log belongs to this game only.
+  useEffect(() => {
+    return () => {
+      viewRequest.current += 1;
+      dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+    };
+  }, [gameId, dispatch]);
+
+  const liveIndex = state.gameState?.state_index;
+  /** Show the board at `index`; the live one (or later) goes back to the game. */
+  const viewState = useCallback(
+    async (index: number) => {
+      if (!gameId || liveIndex === undefined) {
+        return;
+      }
+      const request = ++viewRequest.current;
+      const viewed =
+        index >= liveIndex ? null : await getState(gameId, Math.max(index, 0));
+      if (request === viewRequest.current) {
+        dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: viewed });
+      }
+    },
+    [gameId, liveIndex, dispatch]
+  );
 
   // Maybe kick off next query?
   useEffect(() => {
@@ -108,14 +136,23 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     );
   }
 
+  const viewedState = state.viewedState;
+  const readOnly = replayMode || viewedState !== null;
   return (
     <main>
       <h1 className="logo">Catanatron</h1>
-      <ZoomableBoard replayMode={replayMode} />
-      <ActionsToolbar isBotThinking={isBotThinking} replayMode={replayMode} />
-      <LeftDrawer />
+      <ZoomableBoard replayMode={readOnly} />
+      <ActionsToolbar isBotThinking={isBotThinking} replayMode={readOnly} />
+      {viewedState && (
+        <HistoryBanner
+          viewedState={viewedState}
+          liveState={state.gameState}
+          onView={viewState}
+        />
+      )}
+      <LeftDrawer onSelectState={viewState} />
       <RightDrawer>
-        <AnalysisBox stateIndex={"latest"}/>
+        <AnalysisBox stateIndex={viewedState?.state_index ?? "latest"} />
         <Divider />
       </RightDrawer>
     </main>

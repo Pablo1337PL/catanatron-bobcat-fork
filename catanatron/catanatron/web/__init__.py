@@ -50,13 +50,14 @@ def create_app(test_config=None, game_defaults=None, forced_rules=None, analyzer
         options.setdefault("connect_args", {}).setdefault("timeout", 30)
 
     # ===== Initialize Database
-    from catanatron.web.models import db
+    from catanatron.web.models import add_missing_columns, db
 
     with app.app_context():
         db.init_app(app)
         if sqlite_file:
             event.listen(db.engine, "connect", _use_wal)
         db.create_all()
+        add_missing_columns(db.engine)
 
     # ===== Initialize Routes
     from . import api

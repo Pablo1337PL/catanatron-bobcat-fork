@@ -1,0 +1,17 @@
+.page-tabs {
+  margin: -12px 0 18px;
+
+  .MuiTab-root {
+    color: rgb(255 255 255 / 60%);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+
+    &.Mui-selected {
+      color: white;
+    }
+  }
+
+  .MuiTabs-indicator {
+    background: #2278ff;
+  }
+}

@@ -172,3 +172,46 @@ test("loads a historical state without advancing bots in replay mode", async () 
   expect(postAction).not.toHaveBeenCalled();
   expect(screen.queryByRole("button", { name: "ROLL" })).not.toBeInTheDocument();
 });
+
+test("a move picked in the log shows its board until Back to game", async () => {
+  const live = makeGameState({
+    state_index: 2,
+    action_records: [
+      [["BLUE", "ROLL", null], [2, 4]],
+      [["BLUE", "END_TURN", null], null],
+    ] as GameState["action_records"],
+    action_details: [
+      { played_at: 10, resource_changes: {} },
+      { played_at: 12, resource_changes: null },
+    ],
+  });
+  const past = makeGameState({
+    state_index: 1,
+    action_records: live.action_records.slice(0, 1),
+    action_details: live.action_details?.slice(0, 1),
+  });
+  vi.mocked(getState).mockImplementation(async (_gameId, index) =>
+    index === 1 ? past : live
+  );
+
+  renderGameScreen();
+  expect(await screen.findByTestId("board")).toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
+
+  await act(async () => {
+    screen.getAllByRole("button", { name: /ROLLED A 6/ })[0].click();
+  });
+
+  expect(getState).toHaveBeenCalledWith("game-123", 1);
+  expect(await screen.findByText("After move 1 of 2")).toBeInTheDocument();
+  // The live game stays in the store, and the board cannot be played on.
+  expect(screen.getByTestId("state-index")).toHaveTextContent("2");
+  expect(screen.queryByRole("button", { name: "ROLL" })).not.toBeInTheDocument();
+
+  await act(async () => {
+    screen.getByRole("button", { name: "Back to game" }).click();
+  });
+
+  expect(screen.queryByText("After move 1 of 2")).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "ROLL" })).toBeEnabled();
+});
