@@ -28,8 +28,13 @@ export function humanizeActionRecord(
     }
     case "DISCARD_RESOURCE":
       return `${player} DISCARDED ${actionRecord[1] as ResourceCard}`;
-    case "BUY_DEVELOPMENT_CARD":
-      return `${player} BOUGHT DEVELOPMENT CARD`;
+    case "BUY_DEVELOPMENT_CARD": {
+      // The card arrives for one's own purchases, and for the bot's only
+      // once the game is over.
+      const card = actionRecord[1];
+      const drawn = card ? ` (${String(card).replaceAll("_", " ")})` : "";
+      return `${player} BOUGHT DEVELOPMENT CARD${drawn}`;
+    }
     case "BUILD_SETTLEMENT":
     case "BUILD_CITY": {
       const action = actionRecord[0] as BuildCityAction;

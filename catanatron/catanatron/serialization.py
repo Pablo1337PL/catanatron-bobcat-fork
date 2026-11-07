@@ -353,7 +353,7 @@ SECRET_VALUE = {"BUY_DEVELOPMENT_CARD"}
 SECRET_RESULT = {"BUY_DEVELOPMENT_CARD", "MOVE_ROBBER"}
 
 
-def client_view(doc, perspective=None):
+def client_view(doc, perspective=None, face_down=()):
     """Redacted projection of a document, safe to send to a browser or a bot.
 
     Always removes what nobody at the table knows: the seeds of the game and
@@ -366,31 +366,50 @@ def client_view(doc, perspective=None):
     their hands, and the private half of what they did. Pass it for anyone
     who is playing (a bot on the wire always gets it); leave it out for a
     spectator, a replay, or an accumulator collecting training data.
+
+    ``face_down`` lists seats whose development cards are hidden even from a
+    spectator, who still sees their resources: in place of the cards, a count
+    (``NUM_DEVELOPMENT_CARDS_IN_HAND``); no score with victory-point cards in
+    it; no card drawn in their purchases. Their cards in hand join the deck's
+    composition, which would otherwise give them away: it becomes the cards
+    nobody but those seats has seen.
     """
+    colors = doc["colors"]
+    seat = None
+    if perspective is not None:
+        color = getattr(perspective, "value", perspective)
+        if color not in colors:
+            raise ValueError(f"{color!r} is not seated in this game: {colors}")
+        seat = colors.index(color)
+    face_down = {getattr(color, "value", color) for color in face_down}
+    hidden_seats = {
+        i for i, color in enumerate(colors) if color in face_down and i != seat
+    }
+
     view = dict(doc)
-    view["development_listdeck"] = dict(
-        sorted(Counter(doc["development_listdeck"]).items())
-    )
+    unseen = Counter(doc["development_listdeck"])
+    for index in hidden_seats:
+        for card in DEVELOPMENT_CARDS:
+            unseen[card] += doc["player_state"][f"P{index}_{card}_IN_HAND"]
+    view["development_listdeck"] = dict(sorted((+unseen).items()))
     view["game"] = {
         k: v for k, v in doc["game"].items() if k not in ("seed", "dice_seed")
     }
     view.pop("random_state", None)
-    if perspective is None:
+    if seat is None and not hidden_seats:
         return view
 
-    color = getattr(perspective, "value", perspective)
-    if color not in doc["colors"]:
-        raise ValueError(f"{color!r} is not seated in this game: {doc['colors']}")
-    seat = doc["colors"].index(color)
-
+    # A perspective hides every other hand, face_down only the development
+    # cards of its seats.
     state = dict(doc["player_state"])
-    for index in range(len(doc["colors"])):
-        if index == seat:
+    for index in range(len(colors)):
+        if index == seat or (seat is None and index not in hidden_seats):
             continue
         prefix = f"P{index}_"
-        state[prefix + "NUM_RESOURCES_IN_HAND"] = sum(
-            state.pop(f"{prefix}{resource}_IN_HAND") for resource in RESOURCES
-        )
+        if seat is not None:
+            state[prefix + "NUM_RESOURCES_IN_HAND"] = sum(
+                state.pop(f"{prefix}{resource}_IN_HAND") for resource in RESOURCES
+            )
         state[prefix + "NUM_DEVELOPMENT_CARDS_IN_HAND"] = sum(
             state.pop(f"{prefix}{card}_IN_HAND") for card in DEVELOPMENT_CARDS
         )
@@ -400,10 +419,15 @@ def client_view(doc, perspective=None):
         state.pop(prefix + "ACTUAL_VICTORY_POINTS")
     view["player_state"] = state
 
+    def is_secret(action):
+        if seat is not None and action[0] != colors[seat]:
+            return action[1] in SECRET_RESULT
+        return colors.index(action[0]) in hidden_seats and action[1] in SECRET_VALUE
+
     view["action_records"] = [
         (
             [[a[0], a[1], None if a[1] in SECRET_VALUE else a[2]], None]
-            if a[0] != color and a[1] in SECRET_RESULT
+            if is_secret(a)
             else [a, result]
         )
         for a, result in doc["action_records"]
@@ -472,7 +496,12 @@ def geometry(game) -> dict:
     }
 
 
-def web_view(game, perspective=None) -> dict:
+def is_over(game) -> bool:
+    """Won, or cut off at the turn limit."""
+    return game.winning_color() is not None or game.state.num_turns >= TURNS_LIMIT
+
+
+def web_view(game, perspective=None, face_down=()) -> dict:
     """The single payload the web UI receives.
 
     The redacted state document, plus the few things a browser needs that are
@@ -480,19 +509,24 @@ def web_view(game, perspective=None) -> dict:
     which seats are bots (a property of the players), and the board geometry
     (derived from the map).
 
-    ``perspective`` is passed through to :func:`client_view`: with it the
-    browser sees the table as that seat does, without it as a spectator.
+    ``perspective`` and ``face_down`` are passed through to
+    :func:`client_view`: with a perspective the browser sees the table as that
+    seat does, without it as a spectator. While a face-down seat is to move,
+    its legal actions (which would show its cards) are left out.
     """
     state = game.state
     winner = game.winning_color()
-    view = client_view(state_to_json(game), perspective)
+    view = client_view(state_to_json(game), perspective, face_down)
+    hidden = {getattr(color, "value", color) for color in face_down}
     view.update(geometry(game))
     view.update(
         {
             "current_color": state.current_color().value,
-            "current_playable_actions": [
-                action_to_json(a) for a in game.playable_actions
-            ],
+            "current_playable_actions": (
+                []
+                if state.current_color().value in hidden
+                else [action_to_json(a) for a in game.playable_actions]
+            ),
             "current_discard_count": state.discard_counts[state.current_player_index],
             "bot_colors": [p.color.value for p in state.players if p.is_bot],
             "winning_color": winner.value if winner else None,
@@ -502,7 +536,7 @@ def web_view(game, perspective=None) -> dict:
                 "board": game.board_seed,
                 **(
                     {"game": game.seed, "dice": game.dice_seed}
-                    if winner is not None or state.num_turns >= TURNS_LIMIT
+                    if is_over(game)
                     else {}
                 ),
             },

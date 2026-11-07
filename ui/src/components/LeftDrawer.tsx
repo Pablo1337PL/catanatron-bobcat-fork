@@ -32,6 +32,9 @@ function PerspectiveToggle({ gameState }: { gameState: GameState }) {
   if (!humanColor) {
     return null; // Bots only: there is no seat to sit in.
   }
+  if (state.gameState?.winning_color) {
+    return null; // After the game every hand is face up.
+  }
   const seated = state.perspective !== null;
   return (
     <Button

@@ -195,7 +195,14 @@ describe("humanizeAction", () => {
     expect(
       humanizeActionRecord(baseGameState, [
         ["BLUE", "BUY_DEVELOPMENT_CARD", null],
-        "KNIGHT",
+        "YEAR_OF_PLENTY",
+      ])
+    ).toBe("BOT BOUGHT DEVELOPMENT CARD (YEAR OF PLENTY)");
+    // A face-down purchase comes without the card.
+    expect(
+      humanizeActionRecord(baseGameState, [
+        ["BLUE", "BUY_DEVELOPMENT_CARD", null],
+        null,
       ])
     ).toBe("BOT BOUGHT DEVELOPMENT CARD");
   });

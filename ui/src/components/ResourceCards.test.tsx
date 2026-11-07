@@ -1,7 +1,11 @@
-import { render, screen } from "@testing-library/react";
-import { expect, test } from "vitest";
+import { cleanup, render, screen } from "@testing-library/react";
+import { afterEach, expect, test } from "vitest";
 
 import ResourceCards from "./ResourceCards";
+
+afterEach(() => {
+  cleanup();
+});
 
 const OWN_HAND = {
   P0_WOOD_IN_HAND: 2,
@@ -43,6 +47,29 @@ test("shows an opponent's hand as two face-down counts", () => {
   expect(
     screen.getByTitle("2 Development Card(s), face down")
   ).toBeInTheDocument();
+});
+
+test("shows a bot's resources but only the number of its development cards", () => {
+  const { container } = render(
+    <ResourceCards
+      playerState={{
+        P1_WOOD_IN_HAND: 3,
+        P1_BRICK_IN_HAND: 0,
+        P1_SHEEP_IN_HAND: 0,
+        P1_WHEAT_IN_HAND: 1,
+        P1_ORE_IN_HAND: 0,
+        P1_NUM_DEVELOPMENT_CARDS_IN_HAND: 2,
+      }}
+      playerKey="P1"
+    />
+  );
+
+  expect(container.querySelector(".wood-cards")?.textContent).toBe("3");
+  expect(container.querySelectorAll(".hidden-cards")).toHaveLength(0);
+  expect(
+    screen.getByTitle("2 Development Card(s), face down")
+  ).toBeInTheDocument();
+  expect(screen.queryByText("KN")).toBeNull();
 });
 
 test("draws nothing for an empty hand", () => {

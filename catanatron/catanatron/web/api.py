@@ -11,7 +11,7 @@ from catanatron.web.models import (
     get_game_state,
     upsert_game_state,
 )
-from catanatron.serialization import action_from_json, web_view
+from catanatron.serialization import action_from_json, is_over, web_view
 from catanatron.state_functions import get_state_index
 from catanatron.models.enums import ActionType
 from catanatron.models.player import Color
@@ -146,7 +146,9 @@ def get_game_endpoint(game_id, state_index):
     game = get_game_state(game_id, parsed_state_index)
     if game is None:
         abort(404, description="Resource not found")
-    return _game_response(game)
+    if parsed_state_index is None:
+        return _game_response(game)
+    return _game_response(game, latest=get_game_state(game_id))
 
 
 #: One move at a time per game in this process. Requests run in threads, and a
@@ -293,12 +295,21 @@ def analysis_endpoint(game_id, state_index):
 PUBLIC_RESOURCE_CHANGES = {ActionType.ROLL, ActionType.PLAY_MONOPOLY}
 
 
-def _game_response(game):
+def _game_response(game, latest=None):
     """The web view of a stored game, plus when it was created and, aligned
     with ``action_records``, ``action_details``: when each action was played
     (Unix time, seconds, or null) and, for a roll or a monopoly, how it changed
-    the hands (``{"RED": {"WHEAT": 2}}``, or null where unknown)."""
-    view = web_view(game, _perspective(game))
+    the hands (``{"RED": {"WHEAT": 2}}``, or null where unknown).
+
+    ``latest`` is the game's latest state when ``game`` is an earlier one.
+    Until the game is over, a human at the table sees only how many
+    development cards the bots hold; after it, every state shows every hand
+    (the perspective, ``?as=``, no longer applies).
+    """
+    over = is_over(latest or game)
+    face_down = [] if over else _face_down(game)
+    perspective = None if over else _perspective(game)
+    view = web_view(game, perspective, face_down)
     history = get_action_details(game.id, len(game.state.action_records))
     for record, details in zip(game.state.action_records, history["action_details"]):
         if record.action.action_type not in PUBLIC_RESOURCE_CHANGES:
@@ -328,6 +339,15 @@ def _action_error(error, message):
         status=400,
         mimetype="application/json",
     )
+
+
+def _face_down(game):
+    """Seats whose development cards a human at the table may not see: the
+    bots, while somebody is playing against them."""
+    players = game.state.players
+    if all(player.is_bot for player in players):
+        return []
+    return [player.color for player in players if player.is_bot]
 
 
 def _perspective(game):

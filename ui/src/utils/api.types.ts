@@ -13,7 +13,7 @@ export type GameActionRecord =
   | [RollGameAction, [number, number]]
   | [DiscardGameAction, ResourceCard]
   | [MoveRobberAction, ResourceCard | null]
-  | [BuyDevelopmentCardAction, DevelopmentCard]
+  | [BuyDevelopmentCardAction, DevelopmentCard | null] // null: face down
   // These are deterministic and carry no extra info
   | [BuildSettlementAction, null]
   | [BuildCityAction, null]

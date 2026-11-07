@@ -7,18 +7,20 @@ import "./PlayerStateBox.scss";
 
 export default function ResourceCards({ playerState, playerKey }: { playerState: PlayerState; playerKey: string }) {
   const amount = (card: Card) => playerState[`${playerKey}_${card}_IN_HAND`];
+  const developments =
+    playerState[`${playerKey}_NUM_DEVELOPMENT_CARDS_IN_HAND`] ?? 0;
 
   // Seen from another seat, this hand arrives as two counts instead of cards.
   if (amount("WOOD") === undefined) {
     return (
       <FaceDownCards
         resources={playerState[`${playerKey}_NUM_RESOURCES_IN_HAND`] ?? 0}
-        developments={
-          playerState[`${playerKey}_NUM_DEVELOPMENT_CARDS_IN_HAND`] ?? 0
-        }
+        developments={developments}
       />
     );
   }
+  // A bot's development cards stay face down until the game is over.
+  const developmentsHidden = amount("KNIGHT") === undefined;
 
   return (
     <div className="resource-cards" title="Resource Cards">
@@ -48,7 +50,8 @@ export default function ResourceCards({ playerState, playerKey }: { playerState:
         </div>
       )}
       <div className="separator"></div>
-      {amount("VICTORY_POINT") !== 0 && (
+      {developmentsHidden && <FaceDownDevelopmentCards count={developments} />}
+      {!developmentsHidden && amount("VICTORY_POINT") !== 0 && (
         <div
           className="dev-cards center-text card"
           title={amount("VICTORY_POINT") + " Victory Point Card(s)"}
@@ -59,7 +62,7 @@ export default function ResourceCards({ playerState, playerKey }: { playerState:
           </Paper>
         </div>
       )}
-      {amount("KNIGHT") !== 0 && (
+      {!developmentsHidden && amount("KNIGHT") !== 0 && (
         <div
           className="dev-cards center-text card"
           title={amount("KNIGHT") + " Knight Card(s)"}
@@ -70,7 +73,7 @@ export default function ResourceCards({ playerState, playerKey }: { playerState:
           </Paper>
         </div>
       )}
-      {amount("MONOPOLY") !== 0 && (
+      {!developmentsHidden && amount("MONOPOLY") !== 0 && (
         <div
           className="dev-cards center-text card"
           title={amount("MONOPOLY") + " Monopoly Card(s)"}
@@ -81,7 +84,7 @@ export default function ResourceCards({ playerState, playerKey }: { playerState:
           </Paper>
         </div>
       )}
-      {amount("YEAR_OF_PLENTY") !== 0 && (
+      {!developmentsHidden && amount("YEAR_OF_PLENTY") !== 0 && (
         <div
           className="dev-cards center-text card"
           title={amount("YEAR_OF_PLENTY") + " Year of Plenty Card(s)"}
@@ -92,7 +95,7 @@ export default function ResourceCards({ playerState, playerKey }: { playerState:
           </Paper>
         </div>
       )}
-      {amount("ROAD_BUILDING") !== 0 && (
+      {!developmentsHidden && amount("ROAD_BUILDING") !== 0 && (
         <div
           className="dev-cards center-text card"
           title={amount("ROAD_BUILDING") + " Road Building Card(s)"}
@@ -124,17 +127,24 @@ function FaceDownCards({
           <Paper>{resources}</Paper>
         </div>
       )}
-      {developments !== 0 && (
-        <div
-          className="dev-cards center-text card"
-          title={developments + " Development Card(s), face down"}
-        >
-          <Paper>
-            <span>{developments}</span>
-            <span>DEV</span>
-          </Paper>
-        </div>
-      )}
+      <FaceDownDevelopmentCards count={developments} />
+    </div>
+  );
+}
+
+function FaceDownDevelopmentCards({ count }: { count: number }) {
+  if (count === 0) {
+    return null;
+  }
+  return (
+    <div
+      className="dev-cards center-text card"
+      title={count + " Development Card(s), face down"}
+    >
+      <Paper>
+        <span>{count}</span>
+        <span>DEV</span>
+      </Paper>
     </div>
   );
 }
