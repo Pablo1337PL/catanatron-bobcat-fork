@@ -16,6 +16,9 @@ export type CatanState = {
   /** The move pointed at in the log or the analysis; its place is lit up on
    * the board. */
   highlightedAction: GameAction | null;
+  /** The analysis shows a turn plan or discard sets: the right drawer widens
+   * and the board makes room for it. */
+  wideAnalysis: boolean;
   freeRoadsAvailable: number;
   isBuildingRoad: boolean;
   isBuildingSettlement: boolean;
@@ -38,6 +41,7 @@ const initialState: CatanState = {
   perspective: null,
   showLabels: loadShowLabels(),
   highlightedAction: null,
+  wideAnalysis: false,
   // UI
   isBuildingRoad: false,
   isBuildingSettlement: false,
@@ -67,6 +71,8 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
           return { ...state, showLabels: action.data };
         case ACTIONS.SET_HIGHLIGHT:
           return { ...state, highlightedAction: action.data };
+        case ACTIONS.SET_WIDE_ANALYSIS:
+          return { ...state, wideAnalysis: action.data };
         case ACTIONS.SET_LEFT_DRAWER_OPENED:
           return { ...state, isLeftDrawerOpen: action.data };
         case ACTIONS.SET_RIGHT_DRAWER_OPENED:

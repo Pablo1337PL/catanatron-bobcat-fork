@@ -12,6 +12,7 @@ import "./RightDrawer.scss";
 export default function RightDrawer( { children }: PropsWithChildren ) {
   const { state, dispatch } = useContext(store);
   const iOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+  const className = `right-drawer${state.wideAnalysis ? " wide" : ""}`;
 
   const openRightDrawer = useCallback(
     (event: InteractionEvent) => {
@@ -39,7 +40,7 @@ export default function RightDrawer( { children }: PropsWithChildren ) {
     <>
       <Hidden breakpoint={{ size: "lg", direction: "up" }} implementation="js">
         <SwipeableDrawer
-          className="right-drawer"
+          className={className}
           anchor="right"
           open={state.isRightDrawerOpen}
           onClose={closeRightDrawer}
@@ -55,7 +56,7 @@ export default function RightDrawer( { children }: PropsWithChildren ) {
       </Hidden>
       <Hidden breakpoint={{ size: "md", direction: "down" }} implementation="css">
         <Drawer
-          className="right-drawer"
+          className={className}
           anchor="right"
           variant="permanent"
           open

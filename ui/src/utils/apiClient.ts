@@ -7,6 +7,7 @@ import type {
   DevelopmentCard,
   GameAction,
   GameState,
+  ResourceCard,
   VictoryPointCard,
 } from "./api.types";
 
@@ -189,20 +190,91 @@ export type OpponentCards = {
   likely_hand_probability: number;
 };
 
-/** The server engine's view of one position (create_app(analyzer=...)). */
-export type Analysis = {
+export type WinProbability = Partial<Record<Color, number>>;
+
+/** How a turn plan ends: the turn is over, the game is, or a random event
+ * splits it into outcomes, each with its own plan. */
+export type PlanEnd =
+  | {
+      type: "end_turn" | "terminal";
+      win_probability: WinProbability;
+      /** The position after the turn was searched further (MCTS, `sims`). */
+      refined?: boolean;
+      sims?: number;
+    }
+  | { type: "chance"; action: GameAction; outcomes: PlanOutcome[] }
+  | { type: "truncated" };
+
+export type PlanOutcome = {
+  /** The card drawn or the resource stolen; null when nothing is. */
+  result: string | null;
+  probability: number;
+  win_probability: WinProbability;
+  plan: TurnPlan;
+};
+
+/** The rest of a turn: the engine's best actions up to the next random
+ * event or the end of the turn. */
+export type TurnPlan = { steps: GameAction[]; end: PlanEnd };
+
+export type TurnMove = {
+  action: GameAction;
+  win_probability: WinProbability;
+  prior: number | null;
+  best: boolean;
+  /** Leads to none of the turn ends searched further: only the network's
+   * value, and the engine does not pick it. */
+  excluded: boolean;
+  plan: TurnPlan;
+};
+
+export type DiscardMove = {
+  discard: Partial<Record<ResourceCard, number>>;
+  win_probability: WinProbability;
+  best: boolean;
+};
+
+type AnalysisBase = {
   engine: string | null;
   player: Color | null;
-  win_probability: Partial<Record<Color, number>>;
+  win_probability: WinProbability;
   simulations: number;
   seconds: number;
-  moves: AnalysisMove[];
   state_index: number;
   /** The engine's guess at each face-down hand (absent from an older server). */
   opponent_cards?: OpponentCards[];
-  /** A face-down seat is to move: its moves are averaged over its likely hands. */
-  averaged_over_hands?: boolean;
+  /** The turn had too many variations for a turn plan: a regular search. */
+  turn_fallback?: boolean;
 };
+
+/** The server engine's view of one position (create_app(analyzer=...)). */
+export type Analysis = AnalysisBase &
+  (
+    | {
+        /** Absent from an older server. */
+        mode?: "mcts";
+        moves: AnalysisMove[];
+        /** A face-down seat is to move: its moves are averaged over its
+         * likely hands. */
+        averaged_over_hands?: boolean;
+      }
+    | {
+        mode: "turn";
+        moves: TurnMove[];
+        turn_stats: {
+          states: number;
+          leaves: number;
+          pruned: number;
+          refined: number;
+          mcts_sims: number;
+          build_seconds: number;
+          mcts_seconds: number;
+        };
+        /** A face-down seat is to move: the plan assumes this hand. */
+        assumed_hand?: { color: Color; hand: HandCard[]; probability: number };
+      }
+    | { mode: "discard"; moves: DiscardMove[] }
+  );
 
 /** Analyzes a position; throws an Error with the server's message on failure. */
 export async function getAnalysis(

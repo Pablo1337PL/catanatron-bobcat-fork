@@ -5,6 +5,10 @@ $lg-breakpoint: 1280px;
 
 $sm-gutter: 10px;
 
+// Right drawer width while the analysis shows a turn plan (keep in sync with
+// WIDE_DRAWER_EXTRA in ZoomableBoard.tsx: 480 - 280)
+$wide-right-drawer: 480px;
+
 $black: #030000;
 $dark-gray: #151313;
 

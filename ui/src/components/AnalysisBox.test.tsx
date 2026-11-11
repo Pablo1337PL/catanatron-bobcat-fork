@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest";
 
 import { store, type CatanState } from "../store";
 import { makeGameState } from "../test/fixtures";
-import type { GameState } from "../utils/api.types";
+import type { GameAction, GameState } from "../utils/api.types";
 import { type Analysis, getAnalysis } from "../utils/apiClient";
 import AnalysisBox from "./AnalysisBox";
 
@@ -17,7 +17,9 @@ const BLUE_ROLL = ["BLUE", "ROLL", null] as const;
 const BLUE_END = ["BLUE", "END_TURN", null] as const;
 const RED_ROLL = ["RED", "ROLL", null] as const;
 
-function makeAnalysis(overrides: Partial<Analysis> = {}): Analysis {
+type MctsAnalysis = Extract<Analysis, { mode?: "mcts" }>;
+
+function makeAnalysis(overrides: Partial<MctsAnalysis> = {}): MctsAnalysis {
   return {
     engine: "Bobcat az_v1_gen14 · MCTS 1000",
     player: "BLUE",
@@ -236,4 +238,169 @@ test("says when the moves are averaged over hidden hands", async () => {
   await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
 
   expect(await screen.findByText(/Averaged over the hands Bobcat expects/)).toBeTruthy();
+});
+
+// ===== Turn plan and discard sets
+
+const BLUE_BUY = ["BLUE", "BUY_DEVELOPMENT_CARD", null] as const;
+const BLUE_END_TURN = ["BLUE", "END_TURN", null] as const;
+
+function makeTurnAnalysis(): Analysis {
+  const win = (blue: number) => ({ RED: 1 - blue, BLUE: blue });
+  return {
+    engine: "Bobcat az_v1_gen14 · MCTS 1000 · turn plan",
+    player: "BLUE",
+    win_probability: win(0.66),
+    simulations: 4000,
+    seconds: 3.1,
+    state_index: 12,
+    mode: "turn",
+    turn_stats: {
+      states: 120,
+      leaves: 40,
+      pruned: 3,
+      refined: 4,
+      mcts_sims: 4000,
+      build_seconds: 0.4,
+      mcts_seconds: 2.7,
+    },
+    moves: [
+      {
+        action: [...BLUE_BUY],
+        win_probability: win(0.66),
+        prior: 0.3,
+        best: true,
+        excluded: false,
+        plan: {
+          steps: [],
+          end: {
+            type: "chance",
+            action: [...BLUE_BUY],
+            outcomes: [
+              {
+                result: "KNIGHT",
+                probability: 0.56,
+                win_probability: win(0.7),
+                plan: {
+                  steps: [[...BLUE_END_TURN]],
+                  end: { type: "end_turn", win_probability: win(0.7), refined: true, sims: 1000 },
+                },
+              },
+              {
+                result: "VICTORY_POINT",
+                probability: 0.44,
+                win_probability: win(0.61),
+                plan: {
+                  steps: [[...BLUE_END_TURN]],
+                  end: { type: "end_turn", win_probability: win(0.61) },
+                },
+              },
+            ],
+          },
+        },
+      },
+      {
+        action: [...BLUE_END_TURN],
+        win_probability: win(0.5),
+        prior: 0.7,
+        best: false,
+        excluded: true,
+        plan: {
+          steps: [[...BLUE_END_TURN]],
+          end: { type: "end_turn", win_probability: win(0.5) },
+        },
+      },
+    ],
+  };
+}
+
+test("shows a turn plan: best move open, outcomes with their chances", async () => {
+  vi.mocked(getAnalysis).mockResolvedValue(makeTurnAnalysis());
+  const dispatch = vi.fn();
+  renderBox(makeGameState(), dispatch);
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+  expect(await screen.findByText(/Whole turn searched: 120 positions/)).toBeTruthy();
+  const rows = screen
+    .getAllByRole("listitem")
+    .filter((item) => item.classList.contains("turn-move"));
+  expect(rows).toHaveLength(2);
+  expect(rows[1].classList.contains("excluded")).toBe(true);
+
+  // The move is the random event itself: no second "buy" row under it, outcomes come right away
+  expect(within(rows[0]).getAllByText(/Buy/)).toHaveLength(1);
+  // The best move is open: its random event lists both outcomes, the likeliest open
+  const outcomes = within(rows[0]).getAllByRole("button", { expanded: true });
+  expect(outcomes.length).toBeGreaterThanOrEqual(2); // the move and the first outcome
+  expect(within(rows[0]).getByText("Draws Knight")).toBeTruthy();
+  expect(within(rows[0]).getByText("Draws Victory Point")).toBeTruthy();
+  expect(within(rows[0]).getByText("56.0%")).toBeTruthy();
+  expect(within(rows[0]).getByText("★ MCTS 1000")).toBeTruthy();
+  expect(within(rows[0]).getAllByText("End of turn")).toHaveLength(1); // second outcome closed
+
+  await userEvent.click(within(rows[0]).getByText("Draws Victory Point"));
+  expect(within(rows[0]).getAllByText("End of turn")).toHaveLength(2);
+
+  // The other move opens on click; its first step (the move itself) is not repeated under it
+  expect(within(rows[1]).queryByText("End of turn")).toBeNull();
+  await userEvent.click(within(rows[1]).getByRole("button"));
+  expect(within(rows[1]).getByText("End of turn")).toBeTruthy();
+  expect(within(rows[1]).queryAllByRole("listitem").filter((li) => li.classList.contains("line-step")))
+    .toHaveLength(0);
+
+  // The drawer widens for a turn plan
+  expect(dispatch).toHaveBeenCalledWith({ type: "SET_WIDE_ANALYSIS", data: true });
+});
+
+test("a random event after other steps keeps its header", async () => {
+  const analysis = makeTurnAnalysis();
+  if (analysis.mode !== "turn") throw new Error("turn analysis expected");
+  const trade = (): GameAction => ["BLUE", "MARITIME_TRADE", ["WHEAT", "WHEAT", "WHEAT", "WHEAT", "SHEEP"]];
+  analysis.moves[0].action = trade();
+  analysis.moves[0].plan.steps = [trade()];
+  vi.mocked(getAnalysis).mockResolvedValue(analysis);
+  renderBox(makeGameState());
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+  const row = (await screen.findAllByRole("listitem")).find((item) =>
+    item.classList.contains("turn-move")
+  ) as HTMLElement;
+  // The trade is the move's row; the card is bought after it, under its own 🎲 header
+  expect(within(row).getByText(/🎲/)).toBeTruthy();
+  expect(within(row).getAllByText(/WHEAT/)).toHaveLength(1);
+});
+
+test("lists discard sets best first", async () => {
+  vi.mocked(getAnalysis).mockResolvedValue({
+    engine: "Bobcat",
+    player: "BLUE",
+    win_probability: { RED: 0.4, BLUE: 0.6 },
+    simulations: 0,
+    seconds: 0.1,
+    state_index: 12,
+    mode: "discard",
+    moves: [
+      { discard: { WOOD: 2, ORE: 1 }, win_probability: { RED: 0.4, BLUE: 0.6 }, best: true },
+      { discard: { WHEAT: 3 }, win_probability: { RED: 0.55, BLUE: 0.45 }, best: false },
+    ],
+  });
+  const dispatch = vi.fn();
+  renderBox(makeGameState(), dispatch);
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+  expect(await screen.findByText("Discard 2 Wood, 1 Ore")).toBeTruthy();
+  expect(screen.getByText("Discard 3 Wheat")).toBeTruthy();
+  expect(dispatch).toHaveBeenCalledWith({ type: "SET_WIDE_ANALYSIS", data: true });
+});
+
+test("a regular analysis keeps the drawer narrow", async () => {
+  vi.mocked(getAnalysis).mockResolvedValue(makeAnalysis());
+  const dispatch = vi.fn();
+  renderBox(makeGameState(), dispatch);
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+  await screen.findByText("Bobcat az_v1_gen14 · MCTS 1000");
+  expect(dispatch).not.toHaveBeenCalledWith({ type: "SET_WIDE_ANALYSIS", data: true });
 });

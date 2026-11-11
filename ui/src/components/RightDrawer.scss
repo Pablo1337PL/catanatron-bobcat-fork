@@ -21,3 +21,10 @@ $dark-divider: rgb(0 0 0 / 80%);
     background: $dark-divider;
   }
 }
+
+// A turn plan or discard sets in the analysis need more room (ZoomableBoard
+// shrinks the board by the same extra width while the drawer is permanent)
+.right-drawer.wide .MuiDrawer-paper {
+  width: variables.$wide-right-drawer;
+  max-width: 92vw;
+}

@@ -6,6 +6,9 @@ import AbcIcon from "@mui/icons-material/Abc";
 
 import useWindowSize from "../utils/useWindowSize";
 
+/** How much wider the right drawer is with a turn plan (variables.scss). */
+const WIDE_DRAWER_EXTRA = 200;
+
 import "./Board.scss";
 import { displayedGameState, store } from "../store";
 import { isPlayersTurn } from "../utils/stateUtils";
@@ -96,6 +99,9 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
   const { width, height } = useWindowSize();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.up("md"));
+  // Both drawers are permanent from lg up: a wide analysis drawer takes room
+  // from the board (centred between the drawers by GameScreen.scss)
+  const isLarge = useMediaQuery(theme.breakpoints.up("lg"));
   const [show, setShow] = useState(false);
   const gameState = displayedGameState(state);
   if (!gameState)
@@ -188,7 +194,7 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
         </Tooltip>
         <TransformComponent>
           <Board
-            width={width}
+            width={isLarge && state.wideAnalysis ? width - WIDE_DRAWER_EXTRA : width}
             height={height}
             buildOnNodeClick={buildOnNodeClick}
             buildOnEdgeClick={buildOnEdgeClick}

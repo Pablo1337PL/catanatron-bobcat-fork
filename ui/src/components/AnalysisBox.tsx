@@ -1,4 +1,4 @@
-import { Fragment, useContext, useState } from "react";
+import { Fragment, useContext, useEffect, useState } from "react";
 import { Button, CircularProgress, Tooltip } from "@mui/material";
 import AssessmentIcon from "@mui/icons-material/Assessment";
 import { useParams } from "react-router-dom";
@@ -16,6 +16,10 @@ import type { Color, GameState } from "../utils/api.types";
 import { describeAction } from "../utils/promptUtils";
 import useHighlight from "../hooks/useHighlight";
 import { displayedGameState, store } from "../store";
+import ACTIONS from "../actions";
+
+import EvalBar, { percent } from "./EvalBar";
+import TurnPlanMoves, { DiscardSets } from "./TurnPlan";
 
 import "./AnalysisBox.scss";
 
@@ -82,48 +86,6 @@ function PredictedCards({ cards }: { cards: OpponentCards }) {
 type AnalysisBoxProps = {
   stateIndex: StateIndex;
 };
-
-function percent(probability: number | undefined) {
-  return `${((probability ?? 0) * 100).toFixed(1)}%`;
-}
-
-/** Two-color (or more) bar of win probabilities, like a chess evaluation bar. */
-function EvalBar({
-  colors,
-  winProbability,
-  compact = false,
-}: {
-  colors: Color[];
-  winProbability: Partial<Record<Color, number>>;
-  compact?: boolean;
-}) {
-  return (
-    <div
-      className={`eval-bar${compact ? " compact" : ""}`}
-      role="img"
-      aria-label={colors
-        .map((color) => `${color} ${percent(winProbability[color])}`)
-        .join(", ")}
-    >
-      {colors.map((color) => {
-        const p = winProbability[color] ?? 0;
-        return (
-          <div
-            key={color}
-            className={`eval-segment ${color.toLowerCase()}`}
-            style={{ flexGrow: p, flexBasis: 0 }}
-          >
-            {!compact && p >= 0.12 && (
-              <span>
-                {color} {percent(p)}
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /** Assumed hands shown just before line step `index`. */
 function assumptionsAt(move: AnalysisMove, index: number): HandAssumption[] {
@@ -228,7 +190,7 @@ function MoveRow({
 
 export default function AnalysisBox({ stateIndex }: AnalysisBoxProps) {
   const { gameId } = useParams();
-  const { state } = useContext(store);
+  const { state, dispatch } = useContext(store);
   const [analysis, setAnalysis] = useState<Analysis | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -260,11 +222,21 @@ export default function AnalysisBox({ stateIndex }: AnalysisBoxProps) {
   const preRollCardsLeftOut =
     playable.some((action) => action[1] === "ROLL") &&
     playable.some((action) => AFTER_THE_ROLL.includes(action[1]));
-  const moves = analysis
-    ? showAll
-      ? analysis.moves
-      : analysis.moves.slice(0, TOP_MOVES)
-    : [];
+  const shown = <T,>(all: T[]) => (showAll ? all : all.slice(0, TOP_MOVES));
+  const moves =
+    analysis && analysis.mode !== "turn" && analysis.mode !== "discard"
+      ? shown(analysis.moves)
+      : [];
+  // A turn plan and discard sets need a wider drawer
+  const wide =
+    !error && (analysis?.mode === "turn" || analysis?.mode === "discard");
+  useEffect(() => {
+    dispatch({ type: ACTIONS.SET_WIDE_ANALYSIS, data: wide });
+  }, [dispatch, wide]);
+  useEffect(
+    () => () => dispatch({ type: ACTIONS.SET_WIDE_ANALYSIS, data: false }),
+    [dispatch],
+  );
 
   return (
     <div className="analysis-box">
@@ -315,32 +287,73 @@ export default function AnalysisBox({ stateIndex }: AnalysisBoxProps) {
                   </span>{" "}
                   to play
                 </span>
-                <span>choice · win</span>
+                <span>
+                  {analysis.mode === "turn" || analysis.mode === "discard"
+                    ? "win"
+                    : "choice · win"}
+                </span>
               </div>
-              {analysis.averaged_over_hands && (
+              {analysis.turn_fallback && (
                 <div className="analysis-note">
-                  Averaged over the hands Bobcat expects {analysis.player}{" "}
-                  to hold.
+                  Too many turn variations for a turn plan: regular search.
                 </div>
               )}
-              {preRollCardsLeftOut && (
-                <div className="analysis-note">
-                  Bobcat does not consider Year of Plenty, Monopoly and Road
-                  Building before the roll.
-                </div>
-              )}
-              <ol className="moves">
-                {moves.map((move, index) => (
-                  <MoveRow
-                    key={index}
-                    move={move}
-                    rank={index + 1}
-                    player={analysis.player as Color}
+              {analysis.mode === "turn" ? (
+                <>
+                  <div className="analysis-note">
+                    Whole turn searched: {analysis.turn_stats.states} positions,{" "}
+                    {analysis.turn_stats.leaves} ways to end it; the best{" "}
+                    {analysis.turn_stats.refined} searched further (★). Bobcat
+                    picks only among those.
+                  </div>
+                  {analysis.assumed_hand && (
+                    <div className="analysis-note">
+                      Assuming {analysis.assumed_hand.color} holds{" "}
+                      {handText(analysis.assumed_hand.hand)} (
+                      {percent(analysis.assumed_hand.probability)}).
+                    </div>
+                  )}
+                  <TurnPlanMoves
+                    moves={shown(analysis.moves)}
+                    player={analysis.player}
                     colors={colors}
                     gameState={gameState}
                   />
-                ))}
-              </ol>
+                </>
+              ) : analysis.mode === "discard" ? (
+                <DiscardSets
+                  moves={shown(analysis.moves)}
+                  player={analysis.player}
+                  colors={colors}
+                />
+              ) : (
+                <>
+                  {analysis.averaged_over_hands && (
+                    <div className="analysis-note">
+                      Averaged over the hands Bobcat expects {analysis.player}{" "}
+                      to hold.
+                    </div>
+                  )}
+                  {preRollCardsLeftOut && (
+                    <div className="analysis-note">
+                      Bobcat does not consider Year of Plenty, Monopoly and Road
+                      Building before the roll.
+                    </div>
+                  )}
+                  <ol className="moves">
+                    {moves.map((move, index) => (
+                      <MoveRow
+                        key={index}
+                        move={move}
+                        rank={index + 1}
+                        player={analysis.player as Color}
+                        colors={colors}
+                        gameState={gameState}
+                      />
+                    ))}
+                  </ol>
+                </>
+              )}
               {analysis.moves.length > TOP_MOVES && (
                 <Button
                   size="small"

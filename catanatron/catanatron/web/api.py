@@ -271,7 +271,23 @@ def analysis_endpoint(game_id, state_index):
             "averaged_over_hands": True,      # optional: a hidden seat to move,
         }                                     # its moves averaged over its hands
 
-    The endpoint adds ``state_index``. A finished game is not sent to the
+    Optional ``"mode"`` (absent or ``"mcts"``: the format above) switches the
+    moves to another shape, which the UI draws instead of lines:
+
+    - ``"turn"`` -- a plan of the whole turn after the roll. Each move is
+      ``{"action", "win_probability", "prior", "best", "excluded", "plan"}``;
+      a plan is ``{"steps": [action, ...], "end": ...}`` with the best actions
+      up to the end of the turn or the next random event. ``end`` is
+      ``{"type": "end_turn" | "terminal", "win_probability", "refined"?,
+      "sims"?}``, ``{"type": "truncated"}`` or ``{"type": "chance",
+      "action", "outcomes": [{"result", "probability", "win_probability",
+      "plan"}, ...]}`` (the card drawn or resource stolen, likeliest first).
+      Also ``"turn_stats"`` and, for a hidden seat, ``"assumed_hand"``.
+    - ``"discard"`` -- every set of cards to discard:
+      ``{"discard": {"WOOD": 2, ...}, "win_probability", "best"}``.
+
+    ``"turn_fallback": True`` marks a regular analysis where a turn plan was
+    too large. The endpoint adds ``state_index``. A finished game is not sent to the
     analyzer. Errors: 404 unknown game, 501 no analyzer, 400 the analyzer
     raised ValueError (e.g. an unsupported number of players), 500 otherwise.
     """
