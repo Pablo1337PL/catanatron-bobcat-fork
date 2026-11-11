@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useContext, useEffect, useRef } from "react";
 import { Button, IconButton, Tooltip } from "@mui/material";
 import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
@@ -6,6 +6,8 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import type { GameActionRecord, GameState } from "../utils/api.types";
 import { humanizeActionRecord } from "../utils/promptUtils";
 import useHighlight from "../hooks/useHighlight";
+import ACTIONS from "../actions";
+import { store } from "../store";
 
 import "./HistoryBanner.scss";
 
@@ -29,6 +31,10 @@ export default function HistoryBanner({
   onView,
 }: HistoryBannerProps) {
   const highlight = useHighlight();
+  const { dispatch } = useContext(store);
+  // Whether the move text is pointed at: then ←/→ move the highlight along, and
+  // leaving the history (Esc) clears it, with no mouseleave to do it.
+  const pointed = useRef(false);
   const index = viewedState.state_index;
   const liveIndex = liveState?.state_index ?? index;
 
@@ -53,6 +59,30 @@ export default function HistoryBanner({
   const lastRecord = viewedState.action_records[index - 1] as
     | GameActionRecord
     | undefined;
+  const lastAction = lastRecord?.[0] ?? null;
+  const lastKey = JSON.stringify(lastAction);
+
+  useEffect(() => {
+    if (pointed.current) {
+      dispatch({ type: ACTIONS.SET_HIGHLIGHT, data: lastAction });
+    }
+    // lastKey stands for lastAction, a new array on every render
+  }, [lastKey, dispatch]);
+  useEffect(
+    () => () => {
+      if (pointed.current) {
+        dispatch({ type: ACTIONS.SET_HIGHLIGHT, data: null });
+      }
+    },
+    [dispatch],
+  );
+  const handlers = highlight(lastAction);
+  const track =
+    <E,>(isPointed: boolean, handler: (event: E) => void) =>
+    (event: E) => {
+      pointed.current = isPointed;
+      handler(event);
+    };
   return (
     <div className="history-banner" role="status">
       <Tooltip title="Previous move (←)">
@@ -76,7 +106,10 @@ export default function HistoryBanner({
           <span
             className={`history-move ${lastRecord[0][0].toLowerCase()}`}
             tabIndex={0}
-            {...highlight(lastRecord[0])}
+            onMouseEnter={track(true, handlers.onMouseEnter)}
+            onMouseLeave={track(false, handlers.onMouseLeave)}
+            onFocus={track(true, handlers.onFocus)}
+            onBlur={track(false, handlers.onBlur)}
           >
             {humanizeActionRecord(
               viewedState,
