@@ -21,4 +21,4 @@ from catanatron.models.enums import (
 #: fast copy, ...). Bumped whenever something the Bobcat agent relies on
 #: changes, so the agent can refuse to run on an older engine. Read from code
 #: rather than package metadata, so a ``git pull`` is enough to update it.
-BOBCAT_FORK_VERSION = 4  # 2: Longest Road fixes (counting, recompute, set aside); 3: create_app(analyzer=...); 4: 1v1 only (API, registry), no MINI map
+BOBCAT_FORK_VERSION = 5  # 2: Longest Road fixes (counting, recompute, set aside); 3: create_app(analyzer=...); 4: 1v1 only (API, registry), no MINI map; 5: analyzer(game, hidden=...)

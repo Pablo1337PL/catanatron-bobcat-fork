@@ -1,4 +1,4 @@
-import { cleanup, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, test, vi } from "vitest";
@@ -49,12 +49,12 @@ function makeAnalysis(overrides: Partial<Analysis> = {}): Analysis {
   };
 }
 
-function renderBox(gameState: GameState) {
+function renderBox(gameState: GameState, dispatch = vi.fn()) {
   const ui = (state: GameState) => (
     <store.Provider
       value={{
         state: { gameState: state } as CatanState,
-        dispatch: vi.fn(),
+        dispatch,
       }}
     >
       <MemoryRouter initialEntries={["/games/game-123"]}>
@@ -148,4 +148,92 @@ test("cannot analyze a finished game", () => {
     (screen.getByRole("button", { name: /analyze/i }) as HTMLButtonElement)
       .disabled
   ).toBe(true);
+});
+
+test("pointing at a move or a step of its line lights it up on the board", async () => {
+  vi.mocked(getAnalysis).mockResolvedValue(makeAnalysis());
+  const dispatch = vi.fn();
+  renderBox(makeGameState(), dispatch);
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+  const rows = (await screen.findAllByRole("listitem")).filter((item) =>
+    item.classList.contains("move-row")
+  );
+  const highlights = () =>
+    dispatch.mock.calls
+      .map(([action]) => action)
+      .filter((action) => action.type === "SET_HIGHLIGHT")
+      .map((action) => action.data);
+
+  const step = within(rows[1]).getByText("Roll");
+  const last = () => highlights()[highlights().length - 1];
+
+  await userEvent.hover(rows[1]);
+  expect(last()).toEqual([...BLUE_END]);
+  await userEvent.hover(step);
+  expect(last()).toEqual([...RED_ROLL]);
+  // Back from the step onto its row, then off the row
+  fireEvent.mouseOut(step, { relatedTarget: rows[1] });
+  expect(last()).toEqual([...BLUE_END]);
+  fireEvent.mouseOut(rows[1], { relatedTarget: document.body });
+  expect(last()).toBeNull();
+
+  // Keyboard: focusing a step lights the step, not its row
+  dispatch.mockClear();
+  within(rows[1]).getByText("Roll").focus();
+  expect(highlights()).toEqual([[...RED_ROLL]]);
+});
+
+test("shows the predicted cards and where a line assumes a hidden hand", async () => {
+  const analysis = makeAnalysis({
+    opponent_cards: [
+      {
+        color: "RED",
+        count: 2,
+        expected: {
+          KNIGHT: 1.1,
+          YEAR_OF_PLENTY: 0.2,
+          MONOPOLY: 0.2,
+          ROAD_BUILDING: 0.1,
+          VICTORY_POINT: 0.4,
+        },
+        at_least_one: {
+          KNIGHT: 0.74,
+          YEAR_OF_PLENTY: 0.15,
+          MONOPOLY: 0.15,
+          ROAD_BUILDING: 0.08,
+          VICTORY_POINT: 0.33,
+        },
+        likely_hand: ["KNIGHT", "VICTORY_POINT"],
+        likely_hand_probability: 0.31,
+      },
+    ],
+  });
+  analysis.moves[1] = {
+    ...analysis.moves[1],
+    line_assumptions: [
+      { step: 1, color: "RED", hand: ["KNIGHT", "VICTORY_POINT"], probability: 0.31 },
+    ],
+  };
+  vi.mocked(getAnalysis).mockResolvedValue(analysis);
+  renderBox(makeGameState());
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+  expect(await screen.findByText(/Predicted cards/)).toBeTruthy();
+  expect(screen.getByText("1.1 · 74.0%")).toBeTruthy();
+  expect(screen.getByText(/Most likely: Knight, Victory Point \(31.0%\)/)).toBeTruthy();
+  const marker = screen.getByLabelText(
+    "Assuming RED holds Knight, Victory Point (31.0%)"
+  );
+  // The marker sits right before the step it is about
+  expect(marker.nextElementSibling).toHaveTextContent("Roll");
+});
+
+test("says when the moves are averaged over hidden hands", async () => {
+  vi.mocked(getAnalysis).mockResolvedValue(makeAnalysis({ averaged_over_hands: true }));
+  renderBox(makeGameState());
+
+  await userEvent.click(screen.getByRole("button", { name: /analyze/i }));
+
+  expect(await screen.findByText(/Averaged over the hands Bobcat expects/)).toBeTruthy();
 });

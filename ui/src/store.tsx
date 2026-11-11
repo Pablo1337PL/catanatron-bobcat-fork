@@ -1,6 +1,7 @@
 import React, { createContext, useReducer } from "react";
 import ACTIONS from "./actions";
-import { type Color, type GameState } from "./utils/api.types";
+import { type Color, type GameAction, type GameState } from "./utils/api.types";
+import { loadShowLabels } from "./utils/preferences";
 
 export type CatanState = {
   gameState: GameState | null; // TODO
@@ -10,6 +11,11 @@ export type CatanState = {
   /** Whose eyes to see the table through. null watches as a spectator, with
    * every hand face up. */
   perspective: Color | null;
+  /** Whether the board shows the tile letters A-S (remembered per browser). */
+  showLabels: boolean;
+  /** The move pointed at in the log or the analysis; its place is lit up on
+   * the board. */
+  highlightedAction: GameAction | null;
   freeRoadsAvailable: number;
   isBuildingRoad: boolean;
   isBuildingSettlement: boolean;
@@ -30,6 +36,8 @@ const initialState: CatanState = {
   gameState: null,
   viewedState: null,
   perspective: null,
+  showLabels: loadShowLabels(),
+  highlightedAction: null,
   // UI
   isBuildingRoad: false,
   isBuildingSettlement: false,
@@ -55,6 +63,10 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
       switch (action.type) {
         case ACTIONS.SET_PERSPECTIVE:
           return { ...state, perspective: action.data };
+        case ACTIONS.SET_SHOW_LABELS:
+          return { ...state, showLabels: action.data };
+        case ACTIONS.SET_HIGHLIGHT:
+          return { ...state, highlightedAction: action.data };
         case ACTIONS.SET_LEFT_DRAWER_OPENED:
           return { ...state, isLeftDrawerOpen: action.data };
         case ACTIONS.SET_RIGHT_DRAWER_OPENED:

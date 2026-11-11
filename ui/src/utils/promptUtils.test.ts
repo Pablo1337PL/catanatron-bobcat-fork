@@ -5,11 +5,14 @@ import {
   findTileById,
   findTileByCoordinate,
   describeAction,
+  edgeLabel,
   formatDuration,
   formatResourceChange,
   humanizeActionRecord,
   humanizeTradeAction,
   moveDuration,
+  nodeLabel,
+  tileLabel,
 } from "./promptUtils";
 import { makeGameState } from "../test/fixtures";
 import type { GameState, GameAction, GameActionRecord } from "./api.types";
@@ -449,5 +452,61 @@ describe("move times and hand changes", () => {
     expect(moveDuration(state, 2)).toBeNull();
     expect(moveDuration(state, 3)).toBeNull();
     expect(moveDuration(makeGameState(), 0)).toBeNull();
+  });
+});
+
+describe("board names", () => {
+  const ore = { id: 2, type: "RESOURCE_TILE", resource: "ORE", number: 10 };
+  const brick = { id: 0, type: "RESOURCE_TILE", resource: "BRICK", number: 6 };
+  const desert = { id: 1, type: "DESERT" };
+  const gameState = {
+    bot_colors: ["BLUE"],
+    tiles: [
+      { coordinate: [0, 0, 0], tile: brick, label: "A" },
+      { coordinate: [1, -1, 0], tile: desert, label: "B" },
+      { coordinate: [2, -2, 0], tile: ore, label: "K" },
+    ],
+    adjacent_tiles: {
+      0: [ore, brick],
+      1: [brick, ore],
+      2: [brick, desert],
+    },
+    nodes: {
+      0: { id: 0, label: "A·S" },
+      1: { id: 1, label: "K·NW" },
+      2: { id: 2, label: "B·N" },
+    },
+    edges: [{ id: [0, 1], label: "A·E" }],
+  } as unknown as GameState;
+
+  test("two nodes with the same numbers get different names", () => {
+    expect(nodeLabel(gameState, 0)).toBe("A·S (6-10)");
+    expect(nodeLabel(gameState, 1)).toBe("K·NW (6-10)");
+    expect(nodeLabel(gameState, 2)).toBe("B·N (6-DESERT)");
+  });
+
+  test("edges and tiles", () => {
+    expect(edgeLabel(gameState, [1, 0])).toBe("A·E (6-10)");
+    expect(tileLabel(gameState, [2, -2, 0])).toBe("K (10 ORE)");
+    expect(tileLabel(gameState, [1, -1, 0])).toBe("B (DESERT)");
+  });
+
+  test("history and analysis use the names", () => {
+    const city = [["BLUE", "BUILD_CITY", 1], null] as GameActionRecord;
+    expect(humanizeActionRecord(gameState, city)).toBe("BOT BUILT CITY ON K·NW (6-10)");
+    const robber = [["RED", "MOVE_ROBBER", [[2, -2, 0], "BLUE"]], "ORE"] as GameActionRecord;
+    expect(humanizeActionRecord(gameState, robber)).toBe("YOU ROBBED K (10 ORE) (STOLE ORE)");
+    expect(describeAction(gameState, ["RED", "BUILD_ROAD", [0, 1]] as GameAction)).toBe(
+      "Road A·E (6-10)",
+    );
+    expect(
+      describeAction(gameState, ["RED", "MOVE_ROBBER", [[2, -2, 0], "BLUE"]] as GameAction),
+    ).toBe("Robber K (10 ORE), steal BLUE");
+  });
+
+  test("an older server without names keeps the numbers", () => {
+    const old = { ...gameState, tiles: gameState.tiles.map(({ label: _, ...t }) => t), nodes: {}, edges: [] };
+    expect(nodeLabel(old as GameState, 0)).toBe("10-6");
+    expect(tileLabel(old as GameState, [2, -2, 0])).toBe("10 ORE");
   });
 });

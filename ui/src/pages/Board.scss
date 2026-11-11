@@ -60,6 +60,28 @@
   font-size: 100%;
 }
 
+// The tile-letter switch in the board's corner
+.board-container {
+  position: relative;
+}
+.labels-toggle.MuiIconButton-root {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 5;
+  color: white;
+  background: rgba(0, 0, 0, 0.35);
+  &[aria-pressed="false"] {
+    opacity: 0.6;
+  }
+}
+// Both drawers permanent: the container reaches 140px under the left one (GameScreen.scss)
+@media (min-width: variables.$lg-breakpoint) {
+  .labels-toggle.MuiIconButton-root {
+    left: 148px;
+  }
+}
+
 // ===== Tiles
 .tile {
   position: absolute;
@@ -162,6 +184,35 @@
   100% {
     transform: scale(0.8);
   }
+}
+
+// The move pointed at in the log or the analysis: a steady gold ring, unlike
+// the white pulse of the places one can build on now.
+.node .highlight,
+.edge .highlight {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translateX(-50%) translateY(-50%);
+  border: 4px solid #ffd54f;
+  border-radius: 6px;
+  background: rgba(255, 213, 79, 0.35);
+  box-shadow: 0 0 14px 6px rgba(255, 213, 79, 0.9);
+  pointer-events: none;
+  z-index: 3;
+}
+.node .highlight {
+  width: 160%;
+  height: 160%;
+  border-radius: 50%;
+}
+.edge .highlight {
+  width: 105%;
+  height: 220%;
+}
+.tile.highlighted {
+  filter: drop-shadow(0 0 6px #ffd54f) brightness(1.15);
+  z-index: 1;
 }
 
 .edge .pulse {

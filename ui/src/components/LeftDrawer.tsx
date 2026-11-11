@@ -23,6 +23,7 @@ import {
   type GameState,
 } from "../utils/api.types";
 import { isTabOrShift, type InteractionEvent } from "../utils/events";
+import useHighlight from "../hooks/useHighlight";
 
 import "./LeftDrawer.scss";
 
@@ -128,6 +129,7 @@ function LogEntry({
   viewed: boolean;
   onSelect?: (stateIndex: number) => void;
 }) {
+  const highlight = useHighlight();
   const actionRecord = gameState.action_records[index] as GameActionRecord;
   const details = gameState.action_details?.[index];
   const duration = moveDuration(gameState, index);
@@ -145,6 +147,7 @@ function LogEntry({
       disabled={!onSelect}
       title={onSelect ? "Show the board after this move" : undefined}
       onClick={() => onSelect?.(index + 1)}
+      {...highlight(actionRecord[0])}
     >
       <span className="action-main">
         <span className="action-text">

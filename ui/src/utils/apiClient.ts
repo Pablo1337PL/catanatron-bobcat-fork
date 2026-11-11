@@ -2,7 +2,13 @@ import axios from "axios";
 import { enqueueSnackbar } from "notistack";
 
 import { API_URL } from "../configuration";
-import type { Color, GameAction, GameState } from "./api.types";
+import type {
+  Color,
+  DevelopmentCard,
+  GameAction,
+  GameState,
+  VictoryPointCard,
+} from "./api.types";
 
 /** A registry key, e.g. "CATANATRON" or "AB". The server decides what exists. */
 export type PlayerKey = string;
@@ -155,6 +161,32 @@ export type AnalysisMove = {
   line: GameAction[];
   /** Why the line stops; null when it reached the engine's depth. */
   line_end: "chance" | "terminal" | "unexplored" | null;
+  /** Where the line assumes a hidden hand: before line[step], `color` holds
+   * `hand` (the engine's guess, with its probability). Absent from an older
+   * server. */
+  line_assumptions?: HandAssumption[];
+};
+
+/** Any card in a development-card hand, Victory Points included. */
+export type HandCard = DevelopmentCard | VictoryPointCard;
+
+export type HandAssumption = {
+  step: number;
+  color: Color;
+  hand: HandCard[];
+  probability: number;
+};
+
+/** The engine's guess at a hand whose development cards are face down. */
+export type OpponentCards = {
+  color: Color;
+  count: number;
+  /** Expected number of each card. */
+  expected: Record<HandCard, number>;
+  /** Chance of holding at least one of each card. */
+  at_least_one: Record<HandCard, number>;
+  likely_hand: HandCard[];
+  likely_hand_probability: number;
 };
 
 /** The server engine's view of one position (create_app(analyzer=...)). */
@@ -166,6 +198,10 @@ export type Analysis = {
   seconds: number;
   moves: AnalysisMove[];
   state_index: number;
+  /** The engine's guess at each face-down hand (absent from an older server). */
+  opponent_cards?: OpponentCards[];
+  /** A face-down seat is to move: its moves are averaged over its likely hands. */
+  averaged_over_hands?: boolean;
 };
 
 /** Analyzes a position; throws an Error with the server's message on failure. */

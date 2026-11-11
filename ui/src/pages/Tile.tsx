@@ -140,6 +140,9 @@ type TileProps = {
   size: any;
   onClick?: React.MouseEventHandler<HTMLDivElement>;
   flashing: boolean;
+  highlighted?: boolean;
+  /** The tile's board letter, A-S, drawn in its upper-left corner. */
+  label?: string;
 };
 
 export default function Tile({
@@ -149,6 +152,8 @@ export default function Tile({
   size,
   onClick,
   flashing,
+  highlighted,
+  label,
 }: TileProps) {
   const w = SQRT3 * size;
   const h = 2 * size;
@@ -170,7 +175,7 @@ export default function Tile({
   return (
     <div
       key={coordinate}
-      className="tile"
+      className={cn("tile", { highlighted })}
       style={{
         left: x - w / 2,
         top: y - h / 2,
@@ -182,6 +187,14 @@ export default function Tile({
       onClick={onClick}
     >
       {contents}
+      {label && (
+        <div
+          className="tile-label"
+          style={{ left: 0.27 * w, top: 0.3 * h, fontSize: 0.3 * size }}
+        >
+          {label}
+        </div>
+      )}
     </div>
   );
 }

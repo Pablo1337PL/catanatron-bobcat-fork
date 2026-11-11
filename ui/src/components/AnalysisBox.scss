@@ -51,6 +51,45 @@
     color: variables.$orange;
   }
 
+  .analysis-note {
+    color: rgb(255 255 255 / 55%);
+    font-style: italic;
+  }
+
+  // The engine's guess at a face-down hand
+  .predicted-cards {
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: rgb(255 255 255 / 6%);
+
+    .predicted-header {
+      font-weight: 600;
+      margin-bottom: 4px;
+    }
+    ul {
+      list-style: none;
+      margin: 0;
+      padding: 0;
+    }
+    li {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .predicted-values {
+      color: rgb(255 255 255 / 70%);
+      font-variant-numeric: tabular-nums;
+    }
+    .predicted-likely {
+      margin-top: 4px;
+      color: rgb(255 255 255 / 70%);
+    }
+  }
+
+  .line-assumption {
+    cursor: help;
+  }
+
   .eval-bar {
     display: flex;
     height: 24px;

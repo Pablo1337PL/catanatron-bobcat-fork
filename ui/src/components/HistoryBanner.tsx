@@ -5,6 +5,7 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 
 import type { GameActionRecord, GameState } from "../utils/api.types";
 import { humanizeActionRecord } from "../utils/promptUtils";
+import useHighlight from "../hooks/useHighlight";
 
 import "./HistoryBanner.scss";
 
@@ -27,6 +28,7 @@ export default function HistoryBanner({
   liveState,
   onView,
 }: HistoryBannerProps) {
+  const highlight = useHighlight();
   const index = viewedState.state_index;
   const liveIndex = liveState?.state_index ?? index;
 
@@ -71,7 +73,11 @@ export default function HistoryBanner({
           {liveIndex}
         </strong>
         {lastRecord && (
-          <span className={`history-move ${lastRecord[0][0].toLowerCase()}`}>
+          <span
+            className={`history-move ${lastRecord[0][0].toLowerCase()}`}
+            tabIndex={0}
+            {...highlight(lastRecord[0])}
+          >
             {humanizeActionRecord(
               viewedState,
               lastRecord,

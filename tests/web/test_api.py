@@ -599,3 +599,16 @@ def test_a_sqlite_file_uses_a_write_ahead_log(tmp_path, monkeypatch):
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{path}")
     create_app({"TESTING": True})
     assert sqlite3.connect(path).execute("PRAGMA journal_mode").fetchone() == ("wal",)
+
+
+def test_state_names_every_place(client):
+    """Tiles, nodes and edges carry their board names (catanatron.notation)."""
+    response = client.post("/api/games", json={"players": ["R", "R"]})
+    game_id = response.get_json()["game_id"]
+
+    state = client.get(f"/api/games/{game_id}/states/latest").get_json()
+
+    land = [t for t in state["tiles"] if t["tile"]["type"] in ("RESOURCE_TILE", "DESERT")]
+    assert sorted(t["label"] for t in land) == list("ABCDEFGHIJKLMNOPQRS")
+    assert sum("label" in node for node in state["nodes"].values()) == 54
+    assert sum("label" in edge for edge in state["edges"]) == 72

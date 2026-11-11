@@ -112,6 +112,8 @@ export type Tile = ResourceTile | DesertTile | WaterTile | PortTile;
 export type PlacedTile = {
   coordinate: TileCoordinate;
   tile: Tile;
+  /** Board name of a land tile, A-S (catanatron.notation); absent from an older server. */
+  label?: string;
 };
 
 export type GameNode = {
@@ -120,6 +122,8 @@ export type GameNode = {
   direction: Direction;
   building: Building | null;
   color: Color | null;
+  /** Board name, e.g. "K·SE"; absent for water-only nodes and from an older server. */
+  label?: string;
 };
 
 export type GameEdge = {
@@ -127,6 +131,8 @@ export type GameEdge = {
   color: Color | null;
   direction: Direction;
   tile_coordinate: TileCoordinate;
+  /** Board name, e.g. "D·E"; absent for water-only edges and from an older server. */
+  label?: string;
 };
 
 /**

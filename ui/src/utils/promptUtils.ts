@@ -40,11 +40,11 @@ export function humanizeActionRecord(
       const action = actionRecord[0] as BuildCityAction;
       const parts = action[1].split("_");
       const building = parts[parts.length - 1];
-      return `${player} BUILT ${building} ON ${nodeString(gameState, action[2])}`;
+      return `${player} BUILT ${building} ON ${nodeLabel(gameState, action[2])}`;
     }
     case "BUILD_ROAD": {
       const action = actionRecord[0] as BuildRoadAction;
-      return `${player} BUILT ROAD ON ${edgeString(gameState, action[2])}`;
+      return `${player} BUILT ROAD ON ${edgeLabel(gameState, action[2])}`;
     }
     case "PLAY_KNIGHT_CARD": {
       return `${player} PLAYED KNIGHT CARD`;
@@ -72,8 +72,7 @@ export function humanizeActionRecord(
     }
     case "MOVE_ROBBER": {
       const action = actionRecord[0] as MoveRobberAction;
-      const tile = findTileByCoordinate(gameState, action[2][0]);
-      const tileString = getTileString(tile);
+      const tileString = tileLabel(gameState, action[2][0]);
       const robbedResource = actionRecord[1];
       const stolenResource = robbedResource ? ` (STOLE ${robbedResource})` : "";
       return `${player} ROBBED ${tileString}${stolenResource}`;
@@ -124,13 +123,20 @@ export function moveDuration(gameState: GameState, index: number): number | null
   return Math.max(0, playedAt - previous);
 }
 
-/** The tiles around a node, e.g. "6-8-5". */
-function nodeString(gameState: GameState, nodeId: number): string {
-  return gameState.adjacent_tiles[nodeId].map(getShortTileString).join("-");
+/**
+ * A node by its board name and the numbers around it, e.g. "D·S (8-10-5)":
+ * the name is unique, the numbers are quick to spot. The numbers follow the
+ * tiles' letters. An older server sends no names: just the numbers.
+ */
+export function nodeLabel(gameState: GameState, nodeId: number): string {
+  const tiles = byLetter(gameState, gameState.adjacent_tiles[nodeId]);
+  const numbers = tiles.map(getShortTileString).join("-");
+  const label = gameState.nodes?.[nodeId]?.label;
+  return label ? `${label} (${numbers})` : numbers;
 }
 
-/** The tiles along an edge, e.g. "6-8". */
-function edgeString(gameState: GameState, edge: [number, number]): string {
+/** An edge, e.g. "D·E (8-4)"; the numbers are the tiles on both sides. */
+export function edgeLabel(gameState: GameState, edge: [number, number]): string {
   const a = gameState.adjacent_tiles[edge[0]].flatMap((tile) =>
     "id" in tile ? [tile.id] : []
   );
@@ -138,15 +144,44 @@ function edgeString(gameState: GameState, edge: [number, number]): string {
     "id" in tile ? [tile.id] : []
   );
   const intersection = a.filter((t) => b.includes(t));
-  const tiles = intersection.map(
-    (tileId) => findTileById(gameState, tileId).tile,
+  const tiles = byLetter(
+    gameState,
+    intersection.map((tileId) => findTileById(gameState, tileId).tile),
   );
-  return tiles.map(getShortTileString).join("-");
+  const numbers = tiles.map(getShortTileString).join("-");
+  const label = gameState.edges?.find(
+    (e) => e.id[0] === Math.min(...edge) && e.id[1] === Math.max(...edge),
+  )?.label;
+  return label ? `${label} (${numbers})` : numbers;
+}
+
+/** A tile, e.g. "K (10 ORE)" or "B (DESERT)"; "10 ORE" from an older server. */
+export function tileLabel(gameState: GameState, coordinate: unknown): string {
+  const placed = findTileByCoordinate(gameState, coordinate);
+  if (!placed.label) {
+    return getTileString(placed);
+  }
+  const tile = placed.tile;
+  const what = tile.type === "DESERT" ? "DESERT" : getTileString(placed);
+  return `${placed.label} (${what})`;
+}
+
+/** Land tiles in the order of their letters (unchanged without letters). */
+function byLetter(gameState: GameState, tiles: Tile[]): Tile[] {
+  const letters = new Map<number, string>();
+  for (const placed of gameState.tiles) {
+    if (placed.label && "id" in placed.tile) {
+      letters.set(placed.tile.id, placed.label);
+    }
+  }
+  const letter = (tile: Tile) => ("id" in tile ? letters.get(tile.id) : undefined) ?? "";
+  return [...tiles].sort((x, y) => letter(x).localeCompare(letter(y)));
 }
 
 /**
  * A short label for an action that has not happened yet (analysis lines),
- * without its player or outcome, e.g. "Road 6-8" or "Robber 9 ORE, steal BLUE".
+ * without its player or outcome, e.g. "Road D·E (8-4)" or
+ * "Robber K (10 ORE), steal BLUE".
  */
 export function describeAction(gameState: GameState, action: GameAction): string {
   switch (action[1]) {
@@ -157,11 +192,11 @@ export function describeAction(gameState: GameState, action: GameAction): string
     case "BUY_DEVELOPMENT_CARD":
       return "Buy development card";
     case "BUILD_SETTLEMENT":
-      return `Settlement ${nodeString(gameState, action[2])}`;
+      return `Settlement ${nodeLabel(gameState, action[2])}`;
     case "BUILD_CITY":
-      return `City ${nodeString(gameState, action[2])}`;
+      return `City ${nodeLabel(gameState, action[2])}`;
     case "BUILD_ROAD":
-      return `Road ${edgeString(gameState, action[2])}`;
+      return `Road ${edgeLabel(gameState, action[2])}`;
     case "PLAY_KNIGHT_CARD":
       return "Knight";
     case "PLAY_ROAD_BUILDING":
@@ -171,7 +206,7 @@ export function describeAction(gameState: GameState, action: GameAction): string
     case "PLAY_YEAR_OF_PLENTY":
       return `Year of Plenty ${action[2].join(" + ")}`;
     case "MOVE_ROBBER": {
-      const tile = getTileString(findTileByCoordinate(gameState, action[2][0]));
+      const tile = tileLabel(gameState, action[2][0]);
       const victim = action[2][1];
       return victim ? `Robber ${tile}, steal ${victim}` : `Robber ${tile}`;
     }

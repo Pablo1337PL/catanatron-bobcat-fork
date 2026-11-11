@@ -233,7 +233,12 @@ def stress_test_endpoint():
 def analysis_endpoint(game_id, state_index):
     """Analyze a position with the server's engine (``create_app(analyzer=...)``).
 
-    The analyzer gets a copy of the game and returns::
+    The analyzer is called as ``analyzer(game, hidden=[...])`` with a copy of
+    the game and the colors whose development cards the caller cannot see --
+    the same rule as the state view: the bots while a human plays them, none
+    once the game is over (``?as=`` does not change it). The analyzer may use
+    only what the other seats see: it must not read a hidden seat's cards.
+    It returns::
 
         {
             "engine": "Bobcat az_v1_gen14 · MCTS 1000",   # label for the UI
@@ -249,9 +254,22 @@ def analysis_endpoint(game_id, state_index):
                     "win_probability": {...}, # after this move, or null if unexplored
                     "line": [action, ...],    # expected continuation, the move first
                     "line_end": "chance",     # why it stops: chance, terminal,
-                },                            # unexplored, or null (depth reached)
+                                              # unexplored, or null (depth reached)
+                    "line_assumptions": [     # optional: where the line assumes a
+                        {"step": 3, "color": "BLUE",  # hidden hand, and which
+                         "hand": ["KNIGHT"], "probability": 0.31},
+                    ],
+                },
             ],
-        }
+            "opponent_cards": [               # optional: the engine's guess at
+                {"color": "BLUE", "count": 2, # each hidden hand
+                 "expected": {"KNIGHT": 1.1, ...},
+                 "at_least_one": {"KNIGHT": 0.74, ...},
+                 "likely_hand": ["KNIGHT", "VICTORY_POINT"],
+                 "likely_hand_probability": 0.31},
+            ],
+            "averaged_over_hands": True,      # optional: a hidden seat to move,
+        }                                     # its moves averaged over its hands
 
     The endpoint adds ``state_index``. A finished game is not sent to the
     analyzer. Errors: 404 unknown game, 501 no analyzer, 400 the analyzer
@@ -278,8 +296,10 @@ def analysis_endpoint(game_id, state_index):
             "moves": [],
         }
     else:
+        latest = game if parsed_state_index is None else get_game_state(game_id)
+        hidden = [] if is_over(latest) else [c.value for c in _face_down(game)]
         try:
-            analysis = analyzer(game.copy())
+            analysis = analyzer(game.copy(), hidden=hidden)
         except ValueError as error:
             return _json_error(400, "unsupported", str(error))
         except Exception as error:  # the engine is outside this package

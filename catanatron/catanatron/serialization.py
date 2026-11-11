@@ -44,6 +44,7 @@ from catanatron.models.map import (
     get_nodes_and_edges,
 )
 from catanatron.models.player import Color
+from catanatron.notation import board_names
 from catanatron.state import PLAYER_INITIAL_STATE, State
 from catanatron.state_functions import get_longest_road_length
 
@@ -461,8 +462,11 @@ def geometry(game) -> dict:
 
     Derived from ``map``, which the document already carries; the browser
     would otherwise have to re-implement the topology walk in TypeScript.
+    Land tiles, nodes and edges carry their ``label`` from
+    :mod:`catanatron.notation` (``"K"``, ``"K·SE"``, ``"D·E"``).
     """
     board = game.state.board
+    names = board_names(board.map)
     nodes, edges = {}, {}
     for coordinate, tile in board.map.tiles.items():
         for direction, node_id in tile.nodes.items():
@@ -474,17 +478,23 @@ def geometry(game) -> dict:
                 "building": None if building is None else building[1],
                 "color": None if building is None else building[0].value,
             }
+            if node_id in names.nodes:
+                nodes[node_id]["label"] = names.nodes[node_id]
         for direction, edge in tile.edges.items():
             color = board.roads.get(edge, None)
-            edges[tuple(sorted(edge))] = {
-                "id": tuple(sorted(edge)),
+            edge_id = tuple(sorted(edge))
+            edges[edge_id] = {
+                "id": edge_id,
                 "tile_coordinate": coordinate,
                 "direction": direction.value,
                 "color": None if color is None else color.value,
             }
+            if edge_id in names.edges:
+                edges[edge_id]["label"] = names.edges[edge_id]
     return {
         "tiles": [
             {"coordinate": coordinate, "tile": _tile_json(tile)}
+            | ({"label": names.tiles[coordinate]} if coordinate in names.tiles else {})
             for coordinate, tile in board.map.tiles.items()
         ],
         "adjacent_tiles": {

@@ -2,6 +2,7 @@ import classnames from "classnames";
 
 import { SQRT3 } from "../utils/coordinates";
 import type { GameAction, GameState, TileCoordinate } from "../utils/api.types";
+import { NO_PLACES, edgeKey, type Places } from "../utils/highlight";
 import Tile from "./Tile";
 import Node from "./Node";
 import Edge, { toEdgeId, type EdgeId } from "./Edge";
@@ -44,6 +45,10 @@ type BoardProps = {
   show: boolean;
   isMovingRobber: boolean;
   robberCoordinates?: Set<string>;
+  /** Draw the tile letters A-S (when the server sends them). */
+  showLabels?: boolean;
+  /** Places lit up for the move pointed at in the log or the analysis. */
+  highlight?: Places;
 }
 
 export default function Board({
@@ -60,6 +65,8 @@ export default function Board({
   show,
   isMovingRobber,
   robberCoordinates,
+  showLabels = true,
+  highlight = NO_PLACES,
 }: BoardProps) {
   // TODO: Keep in sync with CSS
   const containerHeight = height - 144 - 38 - 40;
@@ -69,15 +76,20 @@ export default function Board({
   if (!size) {
     return null;
   }
+  const litNodes = new Set(highlight.nodes);
+  const litEdges = new Set(highlight.edges.map(edgeKey));
+  const litTiles = new Set(highlight.tiles.map((c) => `${c}`));
 
-  const tiles = gameState.tiles.map(({ coordinate, tile }) => (
+  const tiles = gameState.tiles.map(({ coordinate, tile, label }) => (
     <Tile
       key={`${coordinate}`}
       center={center}
       coordinate={coordinate}
       tile={tile}
+      label={showLabels ? label : undefined}
       size={size}
       flashing={!!robberCoordinates?.has(`${coordinate}`)}
+      highlighted={litTiles.has(`${coordinate}`)}
       onClick={
         !isMovingRobber || robberCoordinates?.has(`${coordinate}`)
           ? () => handleTileClick(coordinate)
@@ -96,6 +108,7 @@ export default function Board({
         building={building}
         color={color}
         flashing={!replayMode && !!nodeActions && id in nodeActions}
+        highlighted={litNodes.has(id)}
         onClick={buildOnNodeClick(
           id,
           nodeActions ? nodeActions[id] : undefined
@@ -114,6 +127,7 @@ export default function Board({
         direction={direction}
         color={color}
         flashing={!!edgeActions && toEdgeId(id) in edgeActions}
+        highlighted={litEdges.has(edgeKey(id))}
         onClick={buildOnEdgeClick(id, edgeActions ? edgeActions[toEdgeId(id)]: undefined)}
       />
     )

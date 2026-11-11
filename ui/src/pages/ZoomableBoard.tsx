@@ -1,7 +1,8 @@
 import { useCallback, useContext, useEffect, useState } from "react";
 import { TransformWrapper, TransformComponent } from "react-zoom-pan-pinch";
 import memoize from "fast-memoize";
-import { useMediaQuery, useTheme } from "@mui/material";
+import { IconButton, Tooltip, useMediaQuery, useTheme } from "@mui/material";
+import AbcIcon from "@mui/icons-material/Abc";
 
 import useWindowSize from "../utils/useWindowSize";
 
@@ -9,6 +10,8 @@ import "./Board.scss";
 import { displayedGameState, store } from "../store";
 import { isPlayersTurn } from "../utils/stateUtils";
 import { postAction } from "../utils/apiClient";
+import { saveShowLabels } from "../utils/preferences";
+import { actionPlaces } from "../utils/highlight";
 import type { CatanState } from "../store";
 import { useParams } from "react-router-dom";
 import ACTIONS from "../actions";
@@ -163,9 +166,26 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
 
   if (!width || !height) return;
 
+  const toggleLabels = () => {
+    saveShowLabels(!state.showLabels);
+    dispatch({ type: ACTIONS.SET_SHOW_LABELS, data: !state.showLabels });
+  };
+  const labelsTitle = state.showLabels ? "Hide tile letters" : "Show tile letters";
+
   return (
     <TransformWrapper>
       <div className="board-container">
+        <Tooltip title={labelsTitle}>
+          <IconButton
+            className="labels-toggle"
+            aria-label={labelsTitle}
+            aria-pressed={state.showLabels}
+            onClick={toggleLabels}
+            size="small"
+          >
+            <AbcIcon />
+          </IconButton>
+        </Tooltip>
         <TransformComponent>
           <Board
             width={width}
@@ -181,6 +201,8 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
             isMobile={isMobile}
             isMovingRobber={state.isMovingRobber}
             robberCoordinates={robberCoordinates}
+            showLabels={state.showLabels}
+            highlight={actionPlaces(state.highlightedAction)}
           />
         </TransformComponent>
       </div>

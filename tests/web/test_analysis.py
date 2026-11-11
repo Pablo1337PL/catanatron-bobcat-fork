@@ -34,9 +34,11 @@ def _analysis(client, game_id, index="latest"):
 class FakeAnalyzer:
     def __init__(self):
         self.games = []
+        self.hidden = []
 
-    def __call__(self, game):
+    def __call__(self, game, hidden=()):
         self.games.append(game)
+        self.hidden.append(list(hidden))
         player = game.state.current_color().value
         return {
             "engine": "fake",
@@ -73,7 +75,7 @@ def test_the_analyzer_gets_the_requested_state():
 
 
 def test_the_analyzer_cannot_change_the_stored_game():
-    def mutating_analyzer(game):
+    def mutating_analyzer(game, hidden=()):
         game.play_tick()
         return FakeAnalyzer()(game)
 
@@ -104,10 +106,10 @@ def test_a_finished_game_is_not_analyzed():
 
 
 def test_analyzer_errors():
-    def unsupported(game):
+    def unsupported(game, hidden=()):
         raise ValueError("1v1 only")
 
-    def broken(game):
+    def broken(game, hidden=()):
         raise RuntimeError("weights missing")
 
     for analyzer, status, error in [
@@ -121,3 +123,23 @@ def test_analyzer_errors():
 
     client = _make_client(FakeAnalyzer())
     assert _analysis(client, "missing").status_code == 404
+
+
+def test_the_analyzer_sees_what_the_caller_sees():
+    """Hidden: the bots' cards while a human plays them; nothing once the game is over."""
+    analyzer = FakeAnalyzer()
+    client = _make_client(analyzer)
+    human_vs_bot = client.post(
+        "/api/games",
+        json={"players": ["HUMAN", "R"], "seed": 1, "board_seed": 1, "dice_seed": 1},
+    ).get_json()["game_id"]
+    bots = _new_game(client)
+
+    assert _analysis(client, human_vs_bot).status_code == 200
+    assert client.get(f"/api/games/{human_vs_bot}/states/0/analysis?as=RED").status_code == 200
+    assert _analysis(client, bots).status_code == 200
+
+    with client.application.app_context():
+        game = get_game_state(human_vs_bot)
+        bot = next(p.color.value for p in game.state.players if p.is_bot)
+    assert analyzer.hidden == [[bot], [bot], []]
