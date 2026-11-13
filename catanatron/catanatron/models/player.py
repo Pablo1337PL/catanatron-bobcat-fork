@@ -64,6 +64,12 @@ class Player(GameObserver):
     def is_bot(self):
         return type(self).IS_BOT
 
+    @classmethod
+    def label(cls) -> str:
+        """Display name: the class's own LABEL (not inherited -- a subclass of
+        AlphaBetaPlayer is its own player), else the class name."""
+        return vars(cls).get("LABEL") or cls.__name__
+
     def decide(self, game, playable_actions):
         """Should return one of the playable_actions or
         an OFFER_TRADE action if its your turn and you have already rolled.

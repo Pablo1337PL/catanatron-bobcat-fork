@@ -510,3 +510,22 @@ describe("board names", () => {
     expect(tileLabel(old as GameState, [2, -2, 0])).toBe("10 ORE");
   });
 });
+
+describe("who made the move", () => {
+  const record = [["BLUE", "END_TURN", null], null] as GameActionRecord;
+
+  test("a bot by its name, a human as YOU", () => {
+    const gameState = {
+      bot_colors: ["BLUE"],
+      player_names: { RED: "Human", BLUE: "Bobcat" },
+    } as unknown as GameState;
+    expect(humanizeActionRecord(gameState, record)).toBe("BOBCAT ENDED TURN");
+    const human = [["RED", "END_TURN", null], null] as GameActionRecord;
+    expect(humanizeActionRecord(gameState, human)).toBe("YOU ENDED TURN");
+  });
+
+  test("BOT from an older server without names", () => {
+    const gameState = { bot_colors: ["BLUE"] } as unknown as GameState;
+    expect(humanizeActionRecord(gameState, record)).toBe("BOT ENDED TURN");
+  });
+});

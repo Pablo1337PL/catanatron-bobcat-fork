@@ -539,6 +539,8 @@ def web_view(game, perspective=None, face_down=()) -> dict:
             ),
             "current_discard_count": state.discard_counts[state.current_player_index],
             "bot_colors": [p.color.value for p in state.players if p.is_bot],
+            # Who sits in each seat, e.g. {"RED": "Human", "BLUE": "Bobcat"}
+            "player_names": {p.color.value: p.label() for p in state.players},
             "winning_color": winner.value if winner else None,
             # To replay the same game; the game and dice seeds reveal every
             # future roll and draw, so they are shown only once it is over.

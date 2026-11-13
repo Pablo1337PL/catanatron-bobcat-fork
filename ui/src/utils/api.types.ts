@@ -145,6 +145,8 @@ export type GameState = {
   tiles: PlacedTile[];
   adjacent_tiles: Record<string, Tile[]>;
   bot_colors: Color[];
+  /** Who sits in each seat, e.g. {RED: "Human", BLUE: "Bobcat"}; absent from an older server. */
+  player_names?: Partial<Record<Color, string>>;
   colors: Color[];
   current_color: Color;
   winning_color: Color | null;

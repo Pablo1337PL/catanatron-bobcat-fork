@@ -11,16 +11,15 @@ import type {
   MoveRobberAction,
   ResourceCard,
 } from "./api.types";
-import type { GameState } from "./api.types";
+import type { Color, GameState } from "./api.types";
 
 export function humanizeActionRecord(
   gameState: GameState,
   actionRecord: GameActionRecord,
   details?: ActionDetails,
 ) {
-  const botColors = gameState.bot_colors;
   const action = actionRecord[0];
-  const player = botColors.includes(action[0]) ? "BOT" : "YOU";
+  const player = playerName(gameState, action[0]);
   switch (actionRecord[0][1]) {
     case "ROLL": {
       const action = actionRecord[1] as [number, number];
@@ -87,6 +86,14 @@ export function humanizeActionRecord(
       throw new Error(`Unknown action type: ${action[1]}`);
   }
 }
+/** Who made a move, as the log says it: "YOU" for a human, else the bot's name ("BOBCAT"). */
+export function playerName(gameState: GameState, color: Color): string {
+  if (!gameState.bot_colors.includes(color)) {
+    return "YOU";
+  }
+  return gameState.player_names?.[color]?.toUpperCase() ?? "BOT";
+}
+
 /** A hand change, e.g. "+2 WHEAT, +1 ORE". */
 export function formatResourceChange(
   change: Partial<Record<ResourceCard, number>>,

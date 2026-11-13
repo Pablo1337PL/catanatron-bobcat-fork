@@ -53,8 +53,7 @@ def describe(key, player_class):
     """What ``--help-players`` renders and ``GET /api/players`` publishes."""
     return {
         "key": key,
-        # Not inherited: a subclass of AlphaBetaPlayer is its own player.
-        "name": vars(player_class).get("LABEL") or player_class.__name__,
+        "name": player_class.label(),
         "description": " ".join((player_class.__doc__ or "").split()),
         "is_bot": player_class.IS_BOT,
         "params": schema_of(player_class),

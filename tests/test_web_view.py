@@ -29,6 +29,7 @@ def test_serialization_matches_gui_contract():
         "player_state",
         "colors",
         "bot_colors",
+        "player_names",
         "is_initial_build_phase",
         "robber_coordinate",
         "current_color",
@@ -46,6 +47,9 @@ def test_serialization_matches_gui_contract():
     assert isinstance(result["action_records"], list)
     assert isinstance(result["robber_coordinate"], list)
     assert result["winning_color"] is None
+    assert result["player_names"] == {
+        color: "SimplePlayer" for color in ("RED", "BLUE", "WHITE", "ORANGE")
+    }
 
     tile_types = {placed_tile["tile"]["type"] for placed_tile in result["tiles"]}
     assert {"RESOURCE_TILE", "DESERT", "PORT", "WATER"} <= tile_types
