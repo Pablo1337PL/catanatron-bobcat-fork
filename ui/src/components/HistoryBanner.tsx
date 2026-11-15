@@ -8,6 +8,8 @@ import { humanizeActionRecord } from "../utils/promptUtils";
 import useHighlight from "../hooks/useHighlight";
 import ACTIONS from "../actions";
 import { store } from "../store";
+import { branchGame } from "../utils/apiClient";
+import { useNavigate, useParams } from "react-router-dom";
 
 import "./HistoryBanner.scss";
 
@@ -32,6 +34,8 @@ export default function HistoryBanner({
 }: HistoryBannerProps) {
   const highlight = useHighlight();
   const { dispatch } = useContext(store);
+  const { gameId } = useParams();
+  const navigate = useNavigate();
   // Whether the move text is pointed at: then ←/→ move the highlight along, and
   // leaving the history (Esc) clears it, with no mouseleave to do it.
   const pointed = useRef(false);
@@ -128,6 +132,27 @@ export default function HistoryBanner({
           <ChevronRightIcon />
         </IconButton>
       </Tooltip>
+      {gameId && (
+        <Tooltip title="Rewind game to this position and play both sides from here">
+          <Button
+            variant="outlined"
+            size="small"
+            color="secondary"
+            style={{ marginRight: 6 }}
+            onClick={async () => {
+              const branched = await branchGame(gameId, index, {
+                inPlace: false,
+                playBothSides: true,
+              });
+              dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+              dispatch({ type: ACTIONS.SET_GAME_STATE, data: branched });
+              navigate(`/games/${branched.game.id}`);
+            }}
+          >
+            Play from here
+          </Button>
+        </Tooltip>
+      )}
       <Button
         variant="contained"
         size="small"

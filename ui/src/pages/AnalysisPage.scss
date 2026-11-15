@@ -25,3 +25,15 @@
     font-size: 0.85rem;
   }
 }
+
+.analysis-page {
+  color: #e6edf3;
+
+  .MuiInputBase-root,
+  .MuiInputBase-input {
+    color: #ffffff !important;
+  }
+  .MuiOutlinedInput-notchedOutline {
+    border-color: rgba(255, 255, 255, 0.28) !important;
+  }
+}

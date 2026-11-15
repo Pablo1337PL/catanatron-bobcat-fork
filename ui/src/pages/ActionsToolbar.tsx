@@ -26,7 +26,7 @@ import Prompt from "../components/Prompt";
 import ResourceCards from "../components/ResourceCards";
 import ResourceSelector from "../components/ResourceSelector";
 import DiscardPlannerDialog from "../components/DiscardPlannerDialog";
-import { store } from "../store";
+import { displayedGameState, store } from "../store";
 import ACTIONS from "../actions";
 import type { GameAction, ResourceCard } from "../utils/api.types"; // Add GameState to the import, adjust path if needed
 import { getHumanColor, playerKey } from "../utils/stateUtils";
@@ -61,14 +61,15 @@ function PlayButtons() {
   const carryOutAction = useCallback(
     memoize((action?: GameAction) => async () => {
       const gameState = await postAction(gameId, action);
+      dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
       dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
       dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
     }),
     [enqueueSnackbar, closeSnackbar],
   );
 
+  const gameState = displayedGameState(state);
   const {
-    gameState,
     isPlayingMonopoly,
     isPlayingYearOfPlenty,
     isRoadBuilding,
@@ -137,6 +138,7 @@ function PlayButtons() {
         console.error("Invalid resource selector mode");
         return;
       }
+      dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
       dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
       dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
     },
@@ -165,6 +167,7 @@ function PlayButtons() {
         humanColor,
         resources,
       });
+      dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
       dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextGameState });
       dispatchSnackbar(enqueueSnackbar, closeSnackbar, nextGameState);
     },
@@ -374,7 +377,7 @@ export default function ActionsToolbar({
   replayMode: boolean;
 }) {
   const { state, dispatch } = useContext(store);
-  const { gameState } = state;
+  const gameState = displayedGameState(state);
   if (gameState === null) {
     console.error("No gameState found...");
     return null;
@@ -393,7 +396,7 @@ export default function ActionsToolbar({
     });
   }, [dispatch]);
 
-  const botsTurn = gameState.bot_colors.includes(gameState.current_color);
+  const botsTurn = state.viewedState === null && gameState.bot_colors.includes(gameState.current_color);
   const humanColor = getHumanColor(gameState);
   return (
     <>

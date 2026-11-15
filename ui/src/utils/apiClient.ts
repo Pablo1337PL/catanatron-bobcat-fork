@@ -125,13 +125,54 @@ export async function getState(
  * as it was, and a 409 means another request was playing this game at the
  * same time: show the server's message and carry on from the current state.
  */
+let forcedRandomState: {
+  dice?: number | null;
+  dev_card?: string | null;
+  robber_resource?: string | null;
+} = {};
+
+let activeViewedStateIndex: number | null = null;
+
+export function setActiveViewedStateIndex(index: number | null) {
+  activeViewedStateIndex = index;
+}
+
+export function setForcedRandom(config: {
+  dice?: number | null;
+  dev_card?: string | null;
+  robber_resource?: string | null;
+}) {
+  forcedRandomState = { ...forcedRandomState, ...config };
+}
+
 export async function postAction(gameId: string, action?: GameAction) {
   try {
+    const hasForced =
+      action &&
+      (forcedRandomState.dice ||
+        forcedRandomState.dev_card ||
+        forcedRandomState.robber_resource);
+    const hasEnvelope =
+      hasForced || activeViewedStateIndex !== null || action === undefined;
+    const body = hasEnvelope
+      ? {
+          action: action ?? null,
+          ...(hasForced ? { forced: forcedRandomState } : {}),
+          ...(activeViewedStateIndex !== null
+            ? { from_state_index: activeViewedStateIndex }
+            : {}),
+        }
+      : action;
     const response = await axios.post<GameState>(
       `${API_URL}/api/games/${gameId}/actions`,
-      action,
+      body,
       { params: viewParams() }
     );
+    activeViewedStateIndex = null;
+    if (response.data?.game?.id && response.data.game.id !== gameId) {
+      window.history.pushState({}, "", `/games/${response.data.game.id}`);
+      window.dispatchEvent(new PopStateEvent("popstate"));
+    }
     return response.data;
   } catch (error) {
     if (
@@ -298,4 +339,71 @@ export async function getAnalysis(
     }
     throw error;
   }
+}
+
+
+export type StoredGameSummary = {
+  game_id: string;
+  created_at: number | null;
+  state_index: number;
+  num_turns: number;
+  colors: Color[];
+  players: string[];
+  vps: Record<string, number>;
+};
+
+export async function listGames(): Promise<StoredGameSummary[]> {
+  const response = await axios.get<StoredGameSummary[]>(`${API_URL}/api/games`);
+  return response.data;
+}
+
+export async function exportGame(
+  gameId: string,
+  stateIndex: StateIndex = "latest"
+): Promise<Record<string, any>> {
+  const response = await axios.get(`${API_URL}/api/games/${gameId}/export`, {
+    params: { state_index: stateIndex },
+  });
+  return response.data;
+}
+
+export async function importGame(
+  doc: Record<string, any>,
+  playBothSides = true
+): Promise<string> {
+  const response = await axios.post<{ game_id: string }>(
+    `${API_URL}/api/games/import`,
+    { ...doc, play_both_sides: playBothSides }
+  );
+  return response.data.game_id;
+}
+
+export async function branchGame(
+  gameId: string,
+  stateIndex: StateIndex,
+  options: { inPlace?: boolean; playBothSides?: boolean; undo?: boolean } = {}
+): Promise<GameState> {
+  const response = await axios.post<GameState>(
+    `${API_URL}/api/games/${gameId}/branch`,
+    {
+      state_index: stateIndex,
+      in_place: options.inPlace ?? false,
+      play_both_sides: options.playBothSides ?? true,
+      undo: options.undo ?? false,
+    },
+    { params: viewParams() }
+  );
+  return response.data;
+}
+
+export async function editGame(
+  gameId: string,
+  editPayload: Record<string, any>
+): Promise<GameState> {
+  const response = await axios.post<GameState>(
+    `${API_URL}/api/games/${gameId}/edit`,
+    editPayload,
+    { params: viewParams() }
+  );
+  return response.data;
 }

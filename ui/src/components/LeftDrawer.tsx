@@ -1,4 +1,5 @@
-import React, { useCallback, useContext } from "react";
+import React, { useCallback, useContext, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import cn from "classnames";
 import SwipeableDrawer from "@mui/material/SwipeableDrawer";
 import Divider from "@mui/material/Divider";
@@ -166,6 +167,128 @@ function LogEntry({
   );
 }
 
+function TimeTravelBar({
+  currentIndex,
+  liveIndex,
+  onSelectState,
+}: {
+  currentIndex: number;
+  liveIndex: number;
+  onSelectState?: (stateIndex: number) => void;
+}) {
+  useEffect(() => {
+    if (!onSelectState) return;
+    const onKeyDown = (event: KeyboardEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target?.closest("input, textarea, select, [contenteditable]")) {
+        return;
+      }
+      if (event.key === "ArrowLeft" && currentIndex > 0) {
+        event.preventDefault();
+        onSelectState(currentIndex - 1);
+      } else if (event.key === "ArrowRight" && currentIndex < liveIndex) {
+        event.preventDefault();
+        onSelectState(currentIndex + 1);
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [currentIndex, liveIndex, onSelectState]);
+
+  if (!onSelectState) return null;
+  const isPast = currentIndex < liveIndex;
+
+  return (
+    <div className="time-travel-bar">
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          type="button"
+          className="nav-btn"
+          disabled={currentIndex === 0}
+          onClick={() => onSelectState(0)}
+          title="Jump to start of game (Move 0)"
+        >
+          |&lt;
+        </button>
+        <button
+          type="button"
+          className="nav-btn"
+          disabled={currentIndex === 0}
+          onClick={() => onSelectState(currentIndex - 1)}
+          title="Previous move (Left Arrow)"
+        >
+          &lt; Prev
+        </button>
+      </div>
+      <div style={{ textAlign: "center" }}>
+        <strong>
+          Move {currentIndex} / {liveIndex}
+        </strong>
+        {isPast && (
+          <div style={{ fontSize: 9, color: "#81c784" }}>
+            Make any move on board to branch!
+          </div>
+        )}
+      </div>
+      <div style={{ display: "flex", gap: 4 }}>
+        <button
+          type="button"
+          className="nav-btn"
+          disabled={currentIndex >= liveIndex}
+          onClick={() => onSelectState(currentIndex + 1)}
+          title="Next move (Right Arrow)"
+        >
+          Next &gt;
+        </button>
+        <button
+          type="button"
+          className="nav-btn"
+          disabled={currentIndex >= liveIndex}
+          onClick={() => onSelectState(liveIndex)}
+          title="Jump to latest move"
+        >
+          &gt;|
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function VariationTree({ logState }: { logState: GameState }) {
+  const navigate = useNavigate();
+  const { dispatch } = useContext(store);
+  const variations = logState.variations ?? [];
+  if (variations.length === 0) {
+    return null;
+  }
+  return (
+    <div className="variation-tree-box">
+      <div className="var-title">
+        <span>Variation Tree (Branches)</span>
+        <span>{variations.length} {variations.length === 1 ? "line" : "lines"}</span>
+      </div>
+      {variations.map((v, idx) => (
+        <button
+          key={v.game_id}
+          type="button"
+          className={cn("var-node", { active: v.active })}
+          onClick={() => {
+            dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+            navigate(`/games/${v.game_id}`);
+          }}
+        >
+          <span>
+            {idx === 0 ? "● Mainline" : `├─ ${v.label}`}
+          </span>
+          <span style={{ opacity: 0.75, fontSize: 10 }}>
+            {v.head_index} moves
+          </span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function DrawerContent({
   gameState,
   logState,
@@ -198,6 +321,12 @@ function DrawerContent({
       <PerspectiveToggle gameState={gameState} />
       <SeedsInfo gameState={gameState} />
       {playerSections}
+      <TimeTravelBar
+        currentIndex={gameState.state_index}
+        liveIndex={logState.state_index}
+        onSelectState={onSelectState}
+      />
+      <VariationTree logState={logState} />
       <div className="log">
         {logState.action_records
           .map((_, index) => (

@@ -163,6 +163,7 @@ export type GameState = {
   edgeActions?: GameAction[];
   nodeActions?: GameAction[];
   state_index: number;
+  variations?: VariationNode[];
   /**
    * Seeds to replay this game. The board seed is public; the game and dice
    * seeds reveal every future roll and draw, so they come once it is over.
@@ -202,3 +203,13 @@ const DIRECTIONS = [
 ] as const;
 
 export type Direction = (typeof DIRECTIONS)[number];
+
+export type VariationNode = {
+  game_id: string;
+  parent_id: string | null;
+  fork_index: number;
+  label: string;
+  head_index: number;
+  last_move?: string | null;
+  active: boolean;
+};

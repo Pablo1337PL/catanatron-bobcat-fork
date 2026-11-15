@@ -29,6 +29,22 @@ export type CatanState = {
   isPlayingYearOfPlenty: boolean;
   isRoadBuilding: boolean;
   isMovingRobber: boolean;
+  sandboxTool: SandboxTool | null;
+  forcedRandom: ForcedRandomConfig;
+};
+
+export type SandboxTool =
+  | { kind: "tile_resource"; resource: "WOOD" | "BRICK" | "SHEEP" | "WHEAT" | "ORE" | "DESERT" }
+  | { kind: "tile_number"; number: number }
+  | { kind: "building"; color: Color; building: "SETTLEMENT" | "CITY" }
+  | { kind: "road"; color: Color }
+  | { kind: "robber" }
+  | { kind: "erase" };
+
+export type ForcedRandomConfig = {
+  dice: number | null;
+  dev_card: string | null;
+  robber_resource: string | null;
 };
 type ReducerAction = {
   type: keyof typeof ACTIONS;
@@ -53,6 +69,8 @@ const initialState: CatanState = {
   isRoadBuilding: false,
   freeRoadsAvailable: 0,
   isMovingRobber: false,
+  sandboxTool: null,
+  forcedRandom: { dice: null, dev_card: null, robber_resource: null },
 } as const;
 
 const store = createContext<{
@@ -128,6 +146,13 @@ const StateProvider = ({ children }: { children: React.ReactNode }) => {
           };
         case ACTIONS.SET_IS_MOVING_ROBBER:
           return { ...state, isMovingRobber: true };
+        case ACTIONS.SET_SANDBOX_TOOL:
+          return { ...state, sandboxTool: action.data };
+        case ACTIONS.SET_FORCED_RANDOM:
+          return {
+            ...state,
+            forcedRandom: { ...state.forcedRandom, ...action.data },
+          };
         default:
           throw new Error("Unknown Reducer Action: " + action.type);
       }

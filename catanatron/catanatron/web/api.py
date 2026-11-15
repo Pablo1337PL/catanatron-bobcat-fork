@@ -136,19 +136,24 @@ def post_game_endpoint():
         **rules,
         **seeds,
     )
+    from catanatron.web.sandbox import record_snapshot, ensure_in_variation_tree
     upsert_game_state(game)
+    record_snapshot(game)
+    ensure_in_variation_tree(game)
     return jsonify({"game_id": game.id})
 
 
 @bp.route("/games/<string:game_id>/states/<string:state_index>", methods=("GET",))
 def get_game_endpoint(game_id, state_index):
+    from catanatron.web.sandbox import get_game_state_safe, ensure_in_variation_tree
     parsed_state_index = _parse_state_index(state_index)
-    game = get_game_state(game_id, parsed_state_index)
+    game = get_game_state_safe(game_id, parsed_state_index)
     if game is None:
         abort(404, description="Resource not found")
+    ensure_in_variation_tree(game)
     if parsed_state_index is None:
         return _game_response(game)
-    return _game_response(game, latest=get_game_state(game_id))
+    return _game_response(game, latest=get_game_state_safe(game_id))
 
 
 #: One move at a time per game in this process. Requests run in threads, and a
@@ -185,31 +190,88 @@ def post_action_endpoint(game_id):
 
 
 def _post_action(game_id):
-    game = get_game_state(game_id)
-    if game is None:
+    import uuid
+    from catanatron.web.sandbox import (
+        ensure_in_variation_tree,
+        get_game_state_safe,
+        make_forced_action_record,
+        overwrite_stored_game_as_base,
+        push_sandbox_history,
+        record_snapshot,
+    )
+
+    req_json = request.get_json(silent=True)
+    body_is_empty = (not request.data) or req_json is None or req_json == {}
+    payload = req_json
+    forced = None
+    from_state_index = None
+    if isinstance(payload, dict) and ("action" in payload or "from_state_index" in payload):
+        forced = payload.get("forced")
+        from_state_index = payload.get("from_state_index")
+        payload = payload.get("action")
+        body_is_empty = payload is None
+
+    latest_game = get_game_state_safe(game_id)
+    if latest_game is None:
         abort(404, description="Resource not found")
-    loaded_index = get_state_index(game.state)
+    latest_index = get_state_index(latest_game.state)
 
-    if game.winning_color() is not None:
-        return _game_response(game)
+    # Lichess-style auto-branch: if the user is viewing an earlier state in history
+    # and plays a move (or clicks Bot Move), automatically fork a new variation branch!
+    is_forking = (
+        from_state_index is not None
+        and int(from_state_index) < latest_index
+    )
+    if is_forking:
+        fork_idx = int(from_state_index)
+        game = get_game_state_safe(game_id, fork_idx)
+        parent_id = game_id
+        game.id = str(uuid.uuid4())
+        # In a forked variation, allow human control on both sides so user can explore freely
+        specs = [{"key": "HUMAN", "params": {}} for _ in game.state.colors]
+        game.state.players = [
+            REGISTRY.build(spec, color)
+            for spec, color in zip(specs, game.state.colors)
+        ]
+        overwrite_stored_game_as_base(game, specs)
+        record_snapshot(game)
+        loaded_index = get_state_index(game.state)
+    else:
+        game = latest_game
+        loaded_index = latest_index
+        if game.winning_color() is not None:
+            return _game_response(game)
+        push_sandbox_history(game.id)
+        record_snapshot(game)
 
-    # TODO: remove `or body_is_empty` when fully implement actions in FE
-    body_is_empty = (not request.data) or request.json is None or request.json == {}
     if game.state.current_player().is_bot or body_is_empty:
-        game.play_tick()
+        if game.state.current_player().is_bot:
+            record = game.play_tick()
+        else:
+            bot_key = "BOBCAT" if "BOBCAT" in REGISTRY else "AB"
+            bot = REGISTRY.build(bot_key, game.state.current_color())
+            action = bot.decide(game, game.playable_actions)
+            record = game.execute(action)
         upsert_game_state(game, expected_index=loaded_index)
+        record_snapshot(game)
     else:
         try:
-            action = action_from_json(request.json)
+            action = action_from_json(payload)
         except (KeyError, ValueError, TypeError, IndexError) as error:
             return _action_error("invalid_action", f"Malformed action: {error}")
         try:
-            game.execute(action)
-        except ValueError:
+            forced_rec = make_forced_action_record(game, action, forced)
+            record = game.execute(action, action_record=forced_rec)
+        except ValueError as error:
             return _action_error(
-                "illegal_action", "Action not allowed in the current game state"
+                "illegal_action", f"Action not allowed in the current game state: {error}"
             )
         upsert_game_state(game, expected_index=loaded_index)
+        record_snapshot(game)
+
+    if is_forking:
+        act_label = f"#{fork_idx + 1} {record.action.color.value} {record.action.action_type.value}"
+        ensure_in_variation_tree(game, parent_id=parent_id, fork_index=fork_idx, label=act_label)
 
     return _game_response(game)
 
@@ -291,8 +353,9 @@ def analysis_endpoint(game_id, state_index):
     analyzer. Errors: 404 unknown game, 501 no analyzer, 400 the analyzer
     raised ValueError (e.g. an unsupported number of players), 500 otherwise.
     """
+    from catanatron.web.sandbox import get_game_state_safe
     parsed_state_index = _parse_state_index(state_index)
-    game = get_game_state(game_id, parsed_state_index)
+    game = get_game_state_safe(game_id, parsed_state_index)
     if game is None:
         abort(404, description="Game state not found")
     analyzer = current_app.config.get("ANALYZER")
@@ -350,7 +413,9 @@ def _game_response(game, latest=None):
     for record, details in zip(game.state.action_records, history["action_details"]):
         if record.action.action_type not in PUBLIC_RESOURCE_CHANGES:
             details["resource_changes"] = None
+    from catanatron.web.sandbox import get_variation_tree
     view.update(history)
+    view["variations"] = get_variation_tree(game.id)
     return Response(
         response=json.dumps(view),
         status=200,
@@ -449,3 +514,155 @@ def _parse_state_index(state_index_str: str):
 #         data[color.value] = float(scores2.numpy()[0][0])
 
 #     return data
+
+
+@bp.route("/games", methods=("GET",))
+def list_games_endpoint():
+    from catanatron.web.models import StoredGame, db
+    rows = (
+        db.session.query(StoredGame)
+        .order_by(StoredGame.created_at.desc())
+        .limit(25)
+        .all()
+    )
+    items = []
+    for row in rows:
+        try:
+            head = json.loads(row.head_state)
+            specs = json.loads(row.player_specs)
+            colors = head.get("colors", ["RED", "BLUE"])
+            vps = {
+                c: head.get("player_state", {}).get(f"P{i}_ACTUAL_VICTORY_POINTS", 0)
+                for i, c in enumerate(colors)
+            }
+            items.append(
+                {
+                    "game_id": row.uuid,
+                    "created_at": row.created_at,
+                    "state_index": row.head_index,
+                    "num_turns": head.get("num_turns", 0),
+                    "colors": colors,
+                    "players": [s.get("key", "HUMAN") for s in specs],
+                    "vps": vps,
+                }
+            )
+        except Exception:
+            continue
+    return jsonify(items)
+
+
+@bp.route("/games/<string:game_id>/export", methods=("GET",))
+def export_game_endpoint(game_id):
+    from catanatron.serialization import state_to_json
+    from catanatron.web.models import StoredGame, db
+    from catanatron.web.sandbox import get_game_state_safe
+    state_index = request.args.get("state_index", "latest")
+    parsed_index = _parse_state_index(state_index)
+    game = get_game_state_safe(game_id, parsed_index)
+    if game is None:
+        abort(404, description="Game not found")
+    stored = db.session.get(StoredGame, game_id)
+    doc = state_to_json(game)
+    doc["player_specs"] = (
+        json.loads(stored.player_specs)
+        if stored
+        else [REGISTRY.spec_of(p) for p in game.state.players]
+    )
+    return jsonify(doc)
+
+
+@bp.route("/games/import", methods=("POST",))
+def import_game_endpoint():
+    import uuid
+    from catanatron.serialization import state_from_json
+    from catanatron.web.sandbox import overwrite_stored_game_as_base
+
+    req_json = request.get_json(silent=True)
+    if not isinstance(req_json, dict):
+        abort(400, description="Expected a game JSON document")
+    doc = dict(req_json)
+    play_both_sides = bool(doc.pop("play_both_sides", True))
+    if "game" not in doc or "colors" not in doc:
+        abort(400, description="Invalid game JSON document")
+    doc["game"] = dict(doc["game"])
+    doc["game"]["id"] = str(uuid.uuid4())
+    colors = [Color[c] for c in doc["colors"]]
+    if play_both_sides:
+        specs = [{"key": "HUMAN", "params": {}} for _ in colors]
+    else:
+        specs = doc.get("player_specs") or [{"key": "HUMAN", "params": {}} for _ in colors]
+    players = [REGISTRY.build(spec, color) for spec, color in zip(specs, colors)]
+    try:
+        game = state_from_json(doc, players)
+    except Exception as error:
+        abort(400, description=f"Could not import game: {error}")
+    overwrite_stored_game_as_base(game, specs)
+    return jsonify({"game_id": game.id})
+
+
+@bp.route("/games/<string:game_id>/branch", methods=("POST",))
+def branch_game_endpoint(game_id):
+    import uuid
+    from catanatron.web.sandbox import (
+        ensure_in_variation_tree,
+        get_game_state_safe,
+        overwrite_stored_game_as_base,
+        overwrite_stored_game_head_only,
+        pop_sandbox_history,
+        push_sandbox_history,
+    )
+
+    body = request.get_json(silent=True) or {}
+    if body.get("undo"):
+        game = pop_sandbox_history(game_id)
+        if game is None:
+            abort(404, description="Game not found")
+        return _game_response(game)
+
+    state_index = body.get("state_index", "latest")
+    in_place = bool(body.get("in_place", False))
+    play_both_sides = bool(body.get("play_both_sides", True))
+    parsed_index = _parse_state_index(str(state_index))
+
+    game = get_game_state_safe(game_id, parsed_index)
+    if game is None:
+        abort(404, description="Game state not found")
+
+    if play_both_sides:
+        specs = [{"key": "HUMAN", "params": {}} for _ in game.state.colors]
+        game.state.players = [
+            REGISTRY.build(spec, color)
+            for spec, color in zip(specs, game.state.colors)
+        ]
+    else:
+        specs = [REGISTRY.spec_of(p) for p in game.state.players]
+
+    fork_idx = get_state_index(game.state)
+    if in_place:
+        push_sandbox_history(game_id)
+        overwrite_stored_game_head_only(game, specs)
+    else:
+        parent_id = game_id
+        game.id = str(uuid.uuid4())
+        overwrite_stored_game_as_base(game, specs)
+        ensure_in_variation_tree(game, parent_id=parent_id, fork_index=fork_idx)
+    return _game_response(game)
+
+
+@bp.route("/games/<string:game_id>/edit", methods=("POST",))
+def edit_game_endpoint(game_id):
+    from catanatron.web.sandbox import apply_sandbox_edit, get_game_state_safe
+
+    req_json = request.get_json(silent=True)
+    if not isinstance(req_json, dict):
+        abort(400, description="Missing edit payload")
+    lock = _game_lock(game_id)
+    with lock:
+        game = get_game_state_safe(game_id)
+        if game is None:
+            abort(404, description="Game not found")
+        try:
+            apply_sandbox_edit(game, req_json)
+        except Exception as error:
+            return _action_error("edit_failed", str(error))
+        return _game_response(game)

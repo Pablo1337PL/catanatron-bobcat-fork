@@ -12,7 +12,7 @@ const WIDE_DRAWER_EXTRA = 200;
 import "./Board.scss";
 import { displayedGameState, store } from "../store";
 import { isPlayersTurn } from "../utils/stateUtils";
-import { postAction } from "../utils/apiClient";
+import { postAction, editGame } from "../utils/apiClient";
 import { saveShowLabels } from "../utils/preferences";
 import { actionPlaces } from "../utils/highlight";
 import type { CatanState } from "../store";
@@ -26,32 +26,33 @@ import type { GameAction, TileCoordinate } from "../utils/api.types";
  * @returns {3 => ["BLUE", "BUILD_CITY", 3], ...}
  */
 function buildNodeActions(state: CatanState) {
-  if (!state.gameState)
+  const gs = displayedGameState(state);
+  if (!gs)
     throw new Error("GameState is not ready!");
 
-  if (!isPlayersTurn(state.gameState)) {
+  if (state.viewedState === null && !isPlayersTurn(gs)) {
     return {};
   }
 
   const nodeActions: Record<number, GameAction> = {};
-  const buildInitialSettlementActions = state.gameState.is_initial_build_phase
-    ? state.gameState.current_playable_actions.filter(
+  const buildInitialSettlementActions = gs.is_initial_build_phase
+    ? gs.current_playable_actions.filter(
         (action) => action[1] === "BUILD_SETTLEMENT"
       )
     : [];
-  const inInitialBuildPhase = state.gameState.is_initial_build_phase;
+  const inInitialBuildPhase = gs.is_initial_build_phase;
   if (inInitialBuildPhase) {
     buildInitialSettlementActions.forEach((action) => {
       nodeActions[action[2]] = action;
     });
   } else if (state.isBuildingSettlement) {
-    state.gameState.current_playable_actions
+    gs.current_playable_actions
       .filter((action) => action[1] === "BUILD_SETTLEMENT")
       .forEach((action) => {
         nodeActions[action[2]] = action;
       });
   } else if (state.isBuildingCity) {
-    state.gameState.current_playable_actions
+    gs.current_playable_actions
       .filter((action) => action[1] === "BUILD_CITY")
       .forEach((action) => {
         nodeActions[action[2]] = action;
@@ -61,26 +62,26 @@ function buildNodeActions(state: CatanState) {
 }
 
 function buildEdgeActions(state: CatanState) {
-  if (!state.gameState)
+  const gs = displayedGameState(state);
+  if (!gs)
     throw new Error("GameState is not ready!");
-  if (!isPlayersTurn(state.gameState)) {
+  if (state.viewedState === null && !isPlayersTurn(gs)) {
     return {};
   }
 
   const edgeActions: Record<`${number},${number}`, GameAction> = {};
-  const buildInitialRoadActions = state.gameState.is_initial_build_phase
-    ? state.gameState.current_playable_actions.filter(
+  const buildInitialRoadActions = gs.is_initial_build_phase
+    ? gs.current_playable_actions.filter(
         (action) => action[1] === "BUILD_ROAD"
       )
     : [];
-  const inInitialBuildPhase = state.gameState.is_initial_build_phase;
+  const inInitialBuildPhase = gs.is_initial_build_phase;
   if (inInitialBuildPhase) {
     buildInitialRoadActions.forEach((action) => {
       edgeActions[`${action[2][0]},${action[2][1]}`] = action;
-      console.log(Object.keys(edgeActions), action);
     });
   } else if (state.isBuildingRoad || state.isRoadBuilding) {
-    state.gameState.current_playable_actions
+    gs.current_playable_actions
       .filter((action) => action[1] === "BUILD_ROAD")
       .forEach((action) => {
         edgeActions[`${action[2][0]},${action[2][1]}`] = action;
@@ -112,31 +113,108 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
   // TODO: Move these up to GameScreen and let Zoomable be presentational component
   // https://stackoverflow.com/questions/61255053/react-usecallback-with-parameter
   const buildOnNodeClick = useCallback(
-    memoize((id, action) => async () => {
-      console.log("Clicked Node ", id, action);
-      if (action) {
-        const gameState = await postAction(gameId, action);
-        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+    (id: number, action?: GameAction) => async () => {
+      if (state.sandboxTool) {
+        if (state.sandboxTool.kind === "building") {
+          const updated = await editGame(gameId, {
+            op: "set_node",
+            node_id: id,
+            color: state.sandboxTool.color,
+            building: state.sandboxTool.building,
+          });
+          dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          return;
+        }
+        if (state.sandboxTool.kind === "erase") {
+          const updated = await editGame(gameId, {
+            op: "set_node",
+            node_id: id,
+            color: null,
+            building: null,
+          });
+          dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          return;
+        }
       }
-    }),
-    []
+      if (action) {
+        const nextState = await postAction(gameId, action);
+        dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextState });
+      }
+    },
+    [gameId, state.sandboxTool, dispatch]
   );
   const buildOnEdgeClick = useCallback(
-    memoize((id, action) => async () => {
-      console.log("Clicked Edge ", id, action);
-      if (action) {
-        const gameState = await postAction(gameId, action);
-        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+    (id: [number, number], action?: GameAction) => async () => {
+      if (state.sandboxTool) {
+        if (state.sandboxTool.kind === "road") {
+          const updated = await editGame(gameId, {
+            op: "set_edge",
+            edge: id,
+            color: state.sandboxTool.color,
+          });
+          dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          return;
+        }
+        if (state.sandboxTool.kind === "erase") {
+          const updated = await editGame(gameId, {
+            op: "set_edge",
+            edge: id,
+            color: null,
+          });
+          dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+          dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          return;
+        }
       }
-    }),
-    []
+      if (action) {
+        const nextState = await postAction(gameId, action);
+        dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextState });
+      }
+    },
+    [gameId, state.sandboxTool, dispatch]
   );
   const handleTileClick = useCallback(
-    memoize((coordinate: TileCoordinate) => {
-      console.log("Clicked Tile ", coordinate);
+    (coordinate: TileCoordinate) => {
+      if (state.sandboxTool) {
+        if (state.sandboxTool.kind === "tile_resource") {
+          editGame(gameId, {
+            op: "set_tile",
+            coordinate,
+            resource: state.sandboxTool.resource,
+          }).then((updated) => {
+            dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          });
+          return;
+        }
+        if (state.sandboxTool.kind === "tile_number") {
+          editGame(gameId, {
+            op: "set_tile",
+            coordinate,
+            number: state.sandboxTool.number,
+          }).then((updated) => {
+            dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          });
+          return;
+        }
+        if (state.sandboxTool.kind === "robber") {
+          editGame(gameId, {
+            op: "set_robber",
+            coordinate,
+          }).then((updated) => {
+            dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: updated });
+          });
+          return;
+        }
+      }
       if (state.isMovingRobber) {
-        // Find the "MOVE_ROBBER" action in current_playable_actions that
-        // corresponds to the tile coordinate selected by the user
         const matchingAction = gameState.current_playable_actions.find(
           (action) =>
             action[1] === "MOVE_ROBBER" &&
@@ -145,13 +223,14 @@ export default function ZoomableBoard({ replayMode }: ZoomableBoardProps) {
             ),
         );
         if (matchingAction) {
-          postAction(gameId, matchingAction).then((gameState) => {
-            dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+          postAction(gameId, matchingAction).then((nextState) => {
+            dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+            dispatch({ type: ACTIONS.SET_GAME_STATE, data: nextState });
           });
         }
       }
-    }),
-    [state.isMovingRobber]
+    },
+    [gameId, state.sandboxTool, state.isMovingRobber, gameState.current_playable_actions, dispatch]
   );
 
   const nodeActions = replayMode ? {} : buildNodeActions(state);

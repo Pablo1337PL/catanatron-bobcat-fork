@@ -17,10 +17,12 @@ import {
   getState,
   postAction,
   setPerspective,
+  setActiveViewedStateIndex,
 } from "../utils/apiClient";
 import { dispatchSnackbar } from "../components/Snackbar";
 import { getHumanColor } from "../utils/stateUtils";
 import AnalysisBox from "../components/AnalysisBox";
+import SandboxPanel from "../components/SandboxPanel";
 import HistoryBanner from "../components/HistoryBanner";
 import { Divider } from "@mui/material";
 
@@ -32,34 +34,37 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   const { enqueueSnackbar, closeSnackbar } = useSnackbar();
   const [isBotThinking, setIsBotThinking] = useState(false);
   const botMoveInFlight = useRef(false);
-  // Only the latest click in the log may set the viewed state.
   const viewRequest = useRef(0);
 
-  // Load game state
+  // Sync viewed state index with apiClient so actions played while viewing history branch cleanly
+  useEffect(() => {
+    setActiveViewedStateIndex(
+      state.viewedState ? state.viewedState.state_index : null
+    );
+  }, [state.viewedState]);
+
+  // Load game state when gameId or perspective changes
   useEffect(() => {
     if (!gameId) {
       return;
     }
-
-    // Every request carries the perspective, so set it before fetching and
-    // refetch whenever it changes.
+    viewRequest.current += 1;
+    setActiveViewedStateIndex(null);
     setPerspective(state.perspective);
+    let cancelled = false;
     (async () => {
       const gameState = await getState(gameId, stateIndex as StateIndex);
-      dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      if (!cancelled) {
+        dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
+        dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
+      }
     })();
+    return () => {
+      cancelled = true;
+    };
   }, [gameId, stateIndex, state.perspective, dispatch]);
 
-  // A state viewed from the log belongs to this game only.
-  useEffect(() => {
-    return () => {
-      viewRequest.current += 1;
-      dispatch({ type: ACTIONS.SET_VIEWED_STATE, data: null });
-    };
-  }, [gameId, dispatch]);
-
   const liveIndex = state.gameState?.state_index;
-  /** Show the board at `index`; the live one (or later) goes back to the game. */
   const viewState = useCallback(
     async (index: number) => {
       if (!gameId || liveIndex === undefined) {
@@ -75,23 +80,25 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
     [gameId, liveIndex, dispatch]
   );
 
-  // Maybe kick off next query?
+  // Auto-play bot only when not viewing historical state and current gameId matches loaded gameState
   useEffect(() => {
-    if (!state.gameState || replayMode || !gameId) {
+    if (
+      !state.gameState ||
+      replayMode ||
+      !gameId ||
+      state.viewedState !== null ||
+      state.gameState.game?.id !== gameId
+    ) {
       return;
     }
     if (
       state.gameState.bot_colors.includes(state.gameState.current_color) &&
       !state.gameState.winning_color
     ) {
-      // One bot move at a time: StrictMode runs this effect twice and the
-      // state can be set again while the bot thinks, and every extra request
-      // would ask the server to play the same move again.
       if (botMoveInFlight.current) {
         return;
       }
       botMoveInFlight.current = true;
-      // Make bot click next action.
       (async () => {
         setIsBotThinking(true);
         const start = new Date();
@@ -105,20 +112,20 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
         }
         const requestTime = new Date().valueOf() - start.valueOf();
         setTimeout(() => {
-          // simulate thinking
           botMoveInFlight.current = false;
           setIsBotThinking(false);
           dispatch({ type: ACTIONS.SET_GAME_STATE, data: gameState });
           if (getHumanColor(gameState)) {
             dispatchSnackbar(enqueueSnackbar, closeSnackbar, gameState);
           }
-        }, ROBOT_THINKING_TIME - requestTime);
+        }, Math.max(0, ROBOT_THINKING_TIME - requestTime));
       })();
     }
   }, [
     gameId,
     replayMode,
     state.gameState,
+    state.viewedState,
     dispatch,
     enqueueSnackbar,
     closeSnackbar,
@@ -127,17 +134,13 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
   if (!state.gameState) {
     return (
       <main>
-        <GridLoader
-          className="loader"
-          color="#000000"
-          size={100}
-        />
+        <GridLoader className="loader" color="#000000" size={100} />
       </main>
     );
   }
 
   const viewedState = state.viewedState;
-  const readOnly = replayMode || viewedState !== null;
+  const readOnly = replayMode;
   return (
     <main>
       <h1 className="logo">Catanatron</h1>
@@ -154,16 +157,13 @@ function GameScreen({ replayMode }: { replayMode: boolean }) {
       <RightDrawer>
         <AnalysisBox stateIndex={viewedState?.state_index ?? "latest"} />
         <Divider />
+        <SandboxPanel />
       </RightDrawer>
     </main>
   );
 }
 
 GameScreen.propTypes = {
-  /**
-   * Injected by the documentation to work in an iframe.
-   * You won't need it on your project.
-   */
   window: PropTypes.func,
 };
 
