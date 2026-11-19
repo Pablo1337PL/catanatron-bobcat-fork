@@ -7,6 +7,7 @@ import random
 import sys
 from typing import Sequence, Union, Optional
 
+from catanatron.dice import BalancedDice
 from catanatron.models.actions import generate_playable_actions
 from catanatron.models.enums import Action, ActionPrompt, ActionRecord, ActionType
 from catanatron.state import State
@@ -84,6 +85,7 @@ class Game:
         board_seed: Optional[int] = None,
         dice_seed: Optional[int] = None,
         seat_order: Optional[Sequence[Color]] = None,
+        balanced_dice: bool = True,
     ):
         """Creates a game (doesn't run it).
 
@@ -105,6 +107,8 @@ class Game:
                 not inherit it. Defaults to None (dice from ``seed``).
             seat_order (List[Color], optional): Colors in seating order; the first
                 places first and starts. Defaults to None (random seats, from ``seed``).
+            balanced_dice (bool, optional): colonist.io's balanced dice
+                (``catanatron.dice``); False rolls two fair dice. Defaults to True.
         """
         #: Everything watching this game: the seated players, plus any
         #: accumulators handed to play(). One list, so each hook is one loop.
@@ -131,6 +135,8 @@ class Game:
                 rng=self.random,
             )
             self.state.dice_seed = dice_seed
+            if balanced_dice:
+                self.state.dice_deck = BalancedDice(len(self.state.colors))
             if seat_order is not None:
                 # After State drew random seats, so the stream (deck, steals)
                 # is the same as with random seating.
@@ -142,6 +148,11 @@ class Game:
             # loop (play, play_tick, or the web server).
             for player in self.state.players:
                 self.watch(player)
+
+    @property
+    def balanced_dice(self) -> bool:
+        """Whether the game rolls colonist.io's balanced dice (else two fair dice)."""
+        return self.state.dice_deck is not None
 
     @property
     def dice_seed(self) -> Optional[int]:

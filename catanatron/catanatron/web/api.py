@@ -35,7 +35,7 @@ def get_players_endpoint():
 
 #: Rules of a new game when the request leaves them out: 1v1 (15 points,
 #: discard above 9 cards, friendly robber).
-DEFAULT_RULES = {"vps_to_win": 15, "discard_limit": 9, "friendly_robber": True}
+DEFAULT_RULES = {"vps_to_win": 15, "discard_limit": 9, "friendly_robber": True, "balanced_dice": True}
 SEED_FIELDS = ("seed", "board_seed", "dice_seed")
 
 
@@ -66,7 +66,8 @@ def post_game_endpoint():
 
     Body: ``players`` (required, seated in this order unless ``random_seats``),
     ``map_template``, ``vps_to_win``, ``discard_limit``, ``friendly_robber``
-    (1v1 by default), ``random_seats`` (default false), and the seeds
+    (1v1 by default), ``balanced_dice`` (colonist.io's balanced dice: true / 1
+    by default, false / 0 for two fair dice), ``random_seats`` (default false), and the seeds
     ``seed``, ``board_seed``, ``dice_seed`` (int >= 0 or null; a missing seed
     is drawn at random below 2**31, so every game can be replayed).
     """
@@ -99,6 +100,13 @@ def post_game_endpoint():
             "friendly_robber",
             lambda v: isinstance(v, bool),
             "'friendly_robber' must be a boolean",
+        ),
+        "balanced_dice": bool(
+            _rule(
+                "balanced_dice",
+                lambda v: isinstance(v, bool) or v in (0, 1),
+                "'balanced_dice' must be a boolean or 0 / 1",
+            )
         ),
     }
     # A server can impose its rules regardless of the form (create_app(forced_rules=...))

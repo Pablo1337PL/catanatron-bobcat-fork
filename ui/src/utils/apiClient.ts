@@ -49,6 +49,8 @@ type CreateGameOptions = {
   vpsToWin: number;
   discardLimit: number;
   friendlyRobber: boolean;
+  /** Colonist.io's balanced dice (the default); false rolls two fair dice. */
+  balancedDice?: boolean;
   /** false: seats follow `players` (Player 1 places first and starts). */
   randomSeats?: boolean;
   seeds?: GameSeeds;
@@ -66,6 +68,7 @@ export async function createGame({
   vpsToWin,
   discardLimit,
   friendlyRobber,
+  balancedDice = true,
   randomSeats = false,
   seeds = {},
 }: CreateGameOptions) {
@@ -84,6 +87,7 @@ export async function createGame({
     vps_to_win: vpsToWin,
     discard_limit: discardLimit,
     friendly_robber: friendlyRobber,
+    balanced_dice: balancedDice,
     random_seats: randomSeats,
     ...seedFields,
   });

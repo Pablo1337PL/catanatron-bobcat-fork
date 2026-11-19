@@ -87,10 +87,15 @@ class State:
             ``seeded_roll(dice_seed, n)``: dice independent of everything else
             (board, deck, players' searches). Never carried over to copies, so
             simulations on copies cannot see the real game's future rolls.
+        dice_deck (BalancedDice, optional): The state of balanced dice
+            (``catanatron.dice``); None for standard dice. Copies share it until
+            one of them rolls (a roll replaces it with an advanced copy).
     """
 
     #: Class default, so copies (``copy``, ``fast_copy``) roll with ``random``.
     dice_seed = None
+    #: Class default: standard dice (games made by Game() get balanced dice).
+    dice_deck = None
 
     def __init__(
         self,
@@ -205,6 +210,7 @@ class State:
 
         state_copy.resource_freqdeck = self.resource_freqdeck.copy()
         state_copy.development_listdeck = self.development_listdeck.copy()
+        state_copy.dice_deck = self.dice_deck  # rolling replaces it
 
         state_copy.buildings_by_color = pickle.loads(
             pickle.dumps(self.buildings_by_color)
@@ -251,6 +257,7 @@ class State:
 
         state_copy.resource_freqdeck = self.resource_freqdeck.copy()
         state_copy.development_listdeck = self.development_listdeck.copy()
+        state_copy.dice_deck = self.dice_deck  # rolling replaces it
 
         buildings_by_color = {}
         for color, by_type in self.buildings_by_color.items():

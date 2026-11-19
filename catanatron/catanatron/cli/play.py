@@ -154,6 +154,13 @@ class CustomTimeRemainingColumn(TimeRemainingColumn):
     help="Prevents robber placement on tiles that would block opponents with fewer than 3 actual victory points, unless no other robber move is available.",
 )
 @click.option(
+    "--config-balanced-dice",
+    default=1,
+    type=click.IntRange(0, 1),
+    show_default=True,
+    help="1: colonist.io's balanced dice (catanatron.dice); 0: two fair dice.",
+)
+@click.option(
     "--quiet",
     default=False,
     is_flag=True,
@@ -181,6 +188,7 @@ def simulate(
     config_map,
     config_number_placement,
     config_friendly_robber,
+    config_balanced_dice,
     quiet,
     help_players,
 ):
@@ -230,6 +238,7 @@ def simulate(
         config_map,
         config_number_placement,
         config_friendly_robber,
+        bool(config_balanced_dice),
     )
     try:
         play_batch(
@@ -262,6 +271,7 @@ class GameConfigOptions:
     map_type: Literal["BASE", "TOURNAMENT"] = "BASE"
     number_placement: NumberPlacement = "official_spiral"
     friendly_robber: bool = False
+    balanced_dice: bool = True
 
     def __post_init__(self):
         if self.number_placement == "official_spiral" and self.map_type == "TOURNAMENT":
@@ -303,6 +313,7 @@ def play_batch_core(num_games, players, game_config, accumulators=[]):
             friendly_robber=game_config.friendly_robber,
             vps_to_win=game_config.vps_to_win,
             catan_map=catan_map,
+            balanced_dice=game_config.balanced_dice,
         )
         game.play(accumulators)
         yield game

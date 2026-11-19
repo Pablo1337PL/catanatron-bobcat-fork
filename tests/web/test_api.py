@@ -612,3 +612,21 @@ def test_state_names_every_place(client):
     assert sorted(t["label"] for t in land) == list("ABCDEFGHIJKLMNOPQRS")
     assert sum("label" in node for node in state["nodes"].values()) == 54
     assert sum("label" in edge for edge in state["edges"]) == 72
+
+
+def test_balanced_dice_by_default(client):
+    """colonist.io's balanced dice unless the game asks for fair dice (0 / false)."""
+    balanced = client.post("/api/games", json={"players": ["R", "R"]}).get_json()["game_id"]
+    fair = client.post(
+        "/api/games", json={"players": ["R", "R"], "balanced_dice": 0}
+    ).get_json()["game_id"]
+    assert client.get(f"/api/games/{fair}/states/latest").get_json()["balanced_dice"] is False
+    for _ in range(30):
+        state = client.post(f"/api/games/{balanced}/actions").get_json()
+    assert state["balanced_dice"] is True
+    assert any(record[0][1] == "ROLL" for record in state["action_records"])
+    # An earlier state is replayed from the log, dice included
+    assert client.get(f"/api/games/{balanced}/states/20").get_json()["balanced_dice"] is True
+
+    bad = client.post("/api/games", json={"players": ["R", "R"], "balanced_dice": "yes"})
+    assert bad.status_code == 400

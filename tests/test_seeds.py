@@ -44,8 +44,9 @@ def test_board_seed_alone_defines_the_board():
 
 
 def test_dice_do_not_depend_on_board_or_players():
-    a = Game(_players(), seed=1, board_seed=1, dice_seed=7)
-    b = Game(_players(RandomPlayer), seed=5, board_seed=2, dice_seed=7)
+    # seeded_roll: the fair dice (balanced dice depend on who rolled before, see test_dice.py)
+    a = Game(_players(), seed=1, board_seed=1, dice_seed=7, balanced_dice=False)
+    b = Game(_players(RandomPlayer), seed=5, board_seed=2, dice_seed=7, balanced_dice=False)
     a.play()
     b.play()
     n = min(len(_rolls(a)), len(_rolls(b)))
@@ -56,7 +57,7 @@ def test_dice_do_not_depend_on_board_or_players():
 
 def test_search_on_copies_does_not_shift_the_dice():
     """Copies have no dice seed: rolling on them neither sees nor moves the real dice."""
-    game = Game(_players(), seed=3, board_seed=3, dice_seed=11)
+    game = Game(_players(), seed=3, board_seed=3, dice_seed=11, balanced_dice=False)
     while game.state.is_initial_build_phase:
         game.play_tick()
     roll = Action(game.state.current_color(), ActionType.ROLL, None)

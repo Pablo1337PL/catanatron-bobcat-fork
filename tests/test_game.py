@@ -131,7 +131,7 @@ def test_seven_cards_dont_trigger_discarding(fake_roll_dice):
 def test_rolling_a_seven_triggers_default_discard_limit(fake_roll_dice):
     fake_roll_dice.return_value = (1, 6)
     players = [SimplePlayer(Color.RED), SimplePlayer(Color.BLUE)]
-    game = Game(players)
+    game = Game(players, balanced_dice=False)  # the patched roll_dice: fair dice
     while not any(a.action_type == ActionType.ROLL for a in game.playable_actions):
         game.play_tick()
 
@@ -164,7 +164,7 @@ def test_all_players_discard_as_needed(fake_roll_dice):
         SimplePlayer(Color.WHITE),
         SimplePlayer(Color.ORANGE),
     ]
-    game = Game(players)
+    game = Game(players, balanced_dice=False)  # the patched roll_dice: fair dice
     while not any(a.action_type == ActionType.ROLL for a in game.playable_actions):
         game.play_tick()
 
@@ -231,12 +231,12 @@ def test_friendly_robber_filters_tiles_in_game_playable_actions(fake_roll_dice):
     fake_roll_dice.return_value = (1, 6)
     players = [SimplePlayer(Color.RED), SimplePlayer(Color.BLUE)]
 
-    regular_game = Game(players, seed=1, friendly_robber=False)
+    regular_game = Game(players, seed=1, friendly_robber=False, balanced_dice=False)
     build_initial_placements(regular_game)
     regular_game.execute(Action(Color.RED, ActionType.ROLL, None))
     regular_coordinates = {action.value[0] for action in regular_game.playable_actions}
 
-    friendly_game = Game(players, seed=1, friendly_robber=True)
+    friendly_game = Game(players, seed=1, friendly_robber=True, balanced_dice=False)
     build_initial_placements(friendly_game)
     friendly_game.execute(Action(Color.RED, ActionType.ROLL, None))
     friendly_coordinates = {
@@ -260,7 +260,7 @@ def test_friendly_robber_does_not_break_pruned_robber_actions(fake_roll_dice):
     fake_roll_dice.return_value = (1, 6)
     players = [SimplePlayer(Color.RED), SimplePlayer(Color.BLUE)]
 
-    game = Game(players, seed=1, friendly_robber=True)
+    game = Game(players, seed=1, friendly_robber=True, balanced_dice=False)
     build_initial_placements(game)
     game.execute(Action(Color.RED, ActionType.ROLL, None))
 

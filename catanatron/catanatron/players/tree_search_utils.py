@@ -2,6 +2,7 @@ import math
 from collections import defaultdict
 
 from catanatron.game import Game
+from catanatron.dice import roll_outcomes as dice_roll_outcomes
 from catanatron.models.map import number_probability
 from catanatron.models.enums import (
     DEVELOPMENT_CARDS,
@@ -60,8 +61,14 @@ def _execute_outcome(game: Game, action: Action, result):
     return option_game
 
 
-def roll_outcomes():
-    """[(dice, proba)] for the sums 2..12; production depends only on the sum."""
+def roll_outcomes(game: Game = None, color=None):
+    """[(dice, proba)] for the sums 2..12; production depends only on the sum.
+
+    With balanced dice (``Game(balanced_dice=True)``, the default) the chances are those of
+    ``color``'s next roll from the game's dice deck (``catanatron.dice``).
+    """
+    if game is not None and game.state.dice_deck is not None:
+        return dice_roll_outcomes(game.state, color)
     return [
         ((roll // 2, math.ceil(roll / 2)), number_probability(roll))
         for roll in range(2, 13)
@@ -116,7 +123,7 @@ def execute_spectrum(game: Game, action: Action):
     elif action.action_type == ActionType.ROLL:
         return [
             (_execute_outcome(game, action, dice), proba)
-            for dice, proba in roll_outcomes()
+            for dice, proba in roll_outcomes(game, action.color)
         ]
     elif action.action_type == ActionType.MOVE_ROBBER:
         (coordinate, robbed_color) = action.value

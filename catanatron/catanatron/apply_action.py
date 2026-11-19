@@ -269,7 +269,21 @@ def apply_roll(state: State, action: Action, action_record=None):
     key = player_key(state, action.color)
     state.player_state[f"{key}_HAS_ROLLED"] = True
 
-    if action_record is not None:
+    if state.dice_deck is not None:
+        # Copy on write: copies of the game share the dice until they roll
+        balanced = state.dice_deck.copy()
+        if action_record is not None:
+            dices = tuple(action_record.result)
+            balanced.record_roll(action.color, dices)
+        else:
+            rng = (
+                random.Random(f"{state.dice_seed}:{count_rolls(state)}")
+                if state.dice_seed is not None
+                else state.random
+            )
+            dices = balanced.throw_dice(action.color, rng)
+        state.dice_deck = balanced
+    elif action_record is not None:
         dices = action_record.result
     elif state.dice_seed is not None:
         dices = seeded_roll(state.dice_seed, count_rolls(state))

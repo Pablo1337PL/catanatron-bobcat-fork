@@ -80,7 +80,7 @@ def test_seeds_are_used_and_recorded(client):
 
 
 def test_dice_follow_the_dice_seed_across_requests(client):
-    game_id, _ = _new_game(client, players=["F", "F"], dice_seed=5)
+    game_id, _ = _new_game(client, players=["F", "F"], dice_seed=5, balanced_dice=False)
     view = _latest(client, game_id)
     for _ in range(80):
         view = client.post(f"/api/games/{game_id}/actions").get_json()

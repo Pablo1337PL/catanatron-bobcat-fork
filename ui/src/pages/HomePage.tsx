@@ -56,6 +56,7 @@ export default function HomePage() {
   const [vpsToWin, setVpsToWin] = useState(15);
   const [discardLimit, setDiscardLimit] = useState(9);
   const [friendlyRobber, setFriendlyRobber] = useState(true);
+  const [balancedDice, setBalancedDice] = useState(true);
   const [players, setPlayers] = useState<PlayerKey[]>(DEFAULT_PLAYERS);
   const [randomSeats, setRandomSeats] = useState(false);
   const [seedTexts, setSeedTexts] = useState<Record<SeedField, string>>({
@@ -128,6 +129,7 @@ export default function HomePage() {
       vpsToWin,
       discardLimit,
       friendlyRobber,
+      balancedDice,
       randomSeats,
       seeds,
     });
@@ -225,6 +227,35 @@ export default function HomePage() {
                   onChange={(event) =>
                     setFriendlyRobber(event.target.checked)
                   }
+                />
+              </div>
+
+              <div className="control-group compact-control switch-control">
+                <div className="control-header">
+                  <span className="inline-title">
+                    Balanced Dice
+                    <Tooltip
+                      title="Colonist.io's balanced dice: the 36 combinations of two dice are a deck reshuffled when fewer than 13 are left, totals rolled recently come up less often, and 7s are spread evenly between the players."
+                      arrow
+                      enterTouchDelay={0}
+                      leaveTouchDelay={3000}
+                    >
+                      <IconButton
+                        size="small"
+                        className="help-button"
+                        aria-label="Balanced Dice help"
+                      >
+                        <HelpOutlineRoundedIcon fontSize="inherit" />
+                      </IconButton>
+                    </Tooltip>
+                  </span>
+                  <strong>{balancedDice ? "On" : "Off"}</strong>
+                </div>
+                <Checkbox
+                  className="inline-switch"
+                  checked={balancedDice}
+                  inputProps={{ "aria-label": "Balanced Dice" }}
+                  onChange={(event) => setBalancedDice(event.target.checked)}
                 />
               </div>
             </div>

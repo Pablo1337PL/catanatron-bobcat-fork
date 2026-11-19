@@ -80,6 +80,8 @@ function SeedsInfo({ gameState }: { gameState: GameState }) {
       Seeds:{" "}
       {parts.map(([label, value]) => `${label} ${value}`).join(" · ")}
       {seeds.dice === undefined ? " · dice & game after the end" : ""}
+      {gameState.balanced_dice === true ? " · balanced dice" : ""}
+      {gameState.balanced_dice === false ? " · fair dice" : ""}
     </div>
   );
 }

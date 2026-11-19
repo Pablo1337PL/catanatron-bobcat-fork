@@ -96,3 +96,16 @@ test("offers two fixed seats on the base or tournament board", async () => {
   fireEvent.click(screen.getByRole("button", { name: "TOURNAMENT" }));
   expect((await start()).mapTemplate).toBe("TOURNAMENT");
 });
+
+test("balanced dice by default", async () => {
+  renderPage(["HUMAN", "BOBCAT"]);
+  await screen.findByText("BOBCAT");
+  expect((await start()).balancedDice).toBe(true);
+});
+
+test("fair dice when switched off", async () => {
+  renderPage(["HUMAN", "BOBCAT"]);
+  await screen.findByText("BOBCAT");
+  fireEvent.click(screen.getByRole("checkbox", { name: "Balanced Dice" }));
+  expect((await start()).balancedDice).toBe(false);
+});

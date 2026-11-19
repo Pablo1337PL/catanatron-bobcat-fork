@@ -168,6 +168,8 @@ export type GameState = {
    * seeds reveal every future roll and draw, so they come once it is over.
    */
   seeds?: { board: number | null; game?: number; dice?: number | null };
+  /** colonist.io's balanced dice (else two fair dice); absent from an older server. */
+  balanced_dice?: boolean;
   /** When the game was created (Unix time in seconds); null if unknown.
    * Missing from an older server. */
   created_at?: number | null;

@@ -44,6 +44,7 @@ from catanatron.models.map import (
     get_nodes_and_edges,
 )
 from catanatron.models.player import Color
+from catanatron.dice import balanced_dice_after
 from catanatron.notation import board_names
 from catanatron.state import PLAYER_INITIAL_STATE, State
 from catanatron.state_functions import get_longest_road_length
@@ -233,6 +234,7 @@ def state_to_json(game: Game):
             "vps_to_win": game.vps_to_win,
             "discard_limit": s.discard_limit,
             "friendly_robber": s.friendly_robber,
+            "balanced_dice": game.balanced_dice,
         },
         "map": map_to_json(s.board.map),
         "board": board_to_json(s.board),
@@ -318,6 +320,10 @@ def state_from_json(doc, players) -> Game:
     s.action_records = [
         action_record_from_json(entry) for entry in doc["action_records"]
     ]
+    # Balanced dice remember only the rolls of the game: rebuilt from the log.
+    # Older documents have no such key: those games were played with fair dice.
+    if doc["game"].get("balanced_dice", False):
+        s.dice_deck = balanced_dice_after(len(s.colors), s.action_records)
     s.num_turns = doc["num_turns"]
     s.current_player_index = doc["current_player_index"]
     s.current_turn_index = doc["current_turn_index"]
@@ -542,6 +548,7 @@ def web_view(game, perspective=None, face_down=()) -> dict:
             # Who sits in each seat, e.g. {"RED": "Human", "BLUE": "Bobcat"}
             "player_names": {p.color.value: p.label() for p in state.players},
             "winning_color": winner.value if winner else None,
+            "balanced_dice": game.balanced_dice,
             # To replay the same game; the game and dice seeds reveal every
             # future roll and draw, so they are shown only once it is over.
             "seeds": {
