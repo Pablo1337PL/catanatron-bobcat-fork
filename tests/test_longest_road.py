@@ -87,3 +87,48 @@ def test_card_set_aside_takes_the_points_back():
     assert state.player_state[f"{key}_VICTORY_POINTS"] == 2
     assert state.player_state[f"{key}_ACTUAL_VICTORY_POINTS"] == 2
     assert state.player_state[f"{key}_LONGEST_ROAD_LENGTH"] == 3
+
+
+def test_road_between_two_enemy_buildings_counts_in_full():
+    """Enemy buildings at both ends of a road do not shorten it (Bobcat fork, version 8): Red's road 6-7-...-11
+    with Blue's settlements on 6 and 11 is 5 long (it used to be 4)."""
+    board = Board()
+    board.build_settlement(BLUE, 6, initial_build_phase=True)
+    board.build_settlement(BLUE, 11, initial_build_phase=True)
+    board.build_settlement(RED, 8, initial_build_phase=True)
+    for edge in [(8, 9), (9, 10), (10, 11), (7, 8), (6, 7)]:
+        board.build_road(RED, edge)
+
+    assert board.road_lengths[RED] == 5
+    assert (board.road_color, board.road_length) == (RED, 5)
+    assert max(len(path) for path in board.continuous_roads_by_player(RED)) == 5
+
+
+def _edges_at(board, node):
+    from catanatron.models.board import STATIC_GRAPH
+
+    return {tuple(sorted(edge)) for edge in STATIC_GRAPH.edges(node)}
+
+
+def test_no_road_from_an_enemy_building_at_the_end_of_my_road():
+    """A road that ends at an enemy building cannot be extended from it (Bobcat fork, version 8)."""
+    board = Board()
+    board.build_settlement(BLUE, 11, initial_build_phase=True)
+    _red_road_of_five(board)
+    buildable = set(map(tuple, map(sorted, board.buildable_edges(RED))))
+    assert not (_edges_at(board, 11) - {(10, 11)}) & buildable
+
+
+def test_no_road_from_an_enemy_settlement_that_split_my_road():
+    """After Blue settles in the middle of Red's road, Red cannot build from Blue's settlement (the split used to
+    put the enemy node back into Red's network)."""
+    board = Board()
+    _red_road_of_five(board)
+    board.build_settlement(BLUE, 26, initial_build_phase=True)
+    board.build_road(BLUE, (26, 27))
+    board.build_road(BLUE, (27, 8))
+    board.build_settlement(BLUE, 8)
+
+    buildable = set(map(tuple, map(sorted, board.buildable_edges(RED))))
+    assert not {e for e in _edges_at(board, 8) if e not in {(7, 8), (8, 9)}} & buildable
+    assert all(8 not in component for component in board.connected_components[RED])

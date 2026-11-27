@@ -128,8 +128,9 @@ class Board:
                     # split this components on here.
                     b_index = self._get_connected_component_index(node_id, edge_color)
                     del self.connected_components[edge_color][b_index]
-                    self.connected_components[edge_color].append(a_nodeset)
-                    self.connected_components[edge_color].append(c_nodeset)
+                    for nodeset in (a_nodeset, c_nodeset):
+                        if nodeset:  # empty when a road's far end is another enemy building
+                            self.connected_components[edge_color].append(nodeset)
                 elif len(edges) == 1:
                     # Endpoint blocked: remove node_id from opponent's component
                     b_index = self._get_connected_component_index(node_id, edge_color)
@@ -157,17 +158,18 @@ class Board:
 
         Returns:
             Set[int]: Nodes that are "connected" to this one
-                by roads of the color player.
+                by roads of the color player. Enemy buildings end a road
+                and are not part of the network (Bobcat fork): a road cannot
+                be extended from them.
         """
-        agenda = [node_id]  # assuming node_id is owned.
+        agenda = [node_id]
         visited = set()
 
         while len(agenda) != 0:
             n = agenda.pop()
-            visited.add(n)
-
-            if self.is_enemy_node(n, color):
+            if n in visited or self.is_enemy_node(n, color):
                 continue  # end of the road
+            visited.add(n)
 
             neighbors = [v for v in STATIC_GRAPH.neighbors(n) if v not in visited]
             expandable = [v for v in neighbors if self.roads.get((n, v), None) == color]
@@ -405,8 +407,19 @@ class Board:
 
 
 def longest_acyclic_path(board: Board, node_set: Set[int], color: Color):
+    """Longest trail of ``color``'s roads in a component. An enemy building
+    ends a trail; a trail may also start at one (Bobcat fork: a road with
+    enemy buildings at both ends counts in full), so the enemy buildings at
+    the ends of the component's roads are start nodes too."""
     paths = []
-    for start_node in node_set:
+    starts = set(node_set)
+    for node in node_set:
+        for neighbor_node in STATIC_GRAPH.neighbors(node):
+            if board.is_enemy_node(neighbor_node, color) and board.is_friendly_road(
+                tuple(sorted((node, neighbor_node))), color
+            ):
+                starts.add(neighbor_node)
+    for start_node in sorted(starts):
         # do DFS when reach leaf node, stop and add to paths
         paths_from_this_node = []
         agenda: List[Tuple[int, Any]] = [(start_node, [])]
