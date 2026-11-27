@@ -144,7 +144,7 @@ class CustomTimeRemainingColumn(TimeRemainingColumn):
 @click.option(
     "--config-number-placement",
     default="official_spiral",
-    type=click.Choice(["official_spiral", "random"], case_sensitive=False),
+    type=click.Choice(["official_spiral", "catanatron_spiral", "random"], case_sensitive=False),
     help="Sets how number tokens are placed on random boards.",
 )
 @click.option(
@@ -274,7 +274,7 @@ class GameConfigOptions:
     balanced_dice: bool = True
 
     def __post_init__(self):
-        if self.number_placement == "official_spiral" and self.map_type == "TOURNAMENT":
+        if self.number_placement != "random" and self.map_type == "TOURNAMENT":
             raise ValueError(
                 "official_spiral number placement is only supported for the base map"
             )

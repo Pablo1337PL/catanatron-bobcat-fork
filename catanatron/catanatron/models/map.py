@@ -46,7 +46,17 @@ BASE_NUMBERS_IN_SPIRAL_ORDER = [
 
 
 MapType = Literal["TOURNAMENT", "BASE"]
-NumberPlacement = Literal["official_spiral", "random"]
+#: How number tokens go on a random board:
+#:
+#: * ``official_spiral`` -- the tokens A..R (5, 2, 6, 3, 8, 10, ...) along the
+#:   spiral of the rulebook, skipping the desert: from the top-left corner
+#:   (cube (0, 2, -2)), clockwise, ring by ring to the centre. The same board
+#:   generator as colonist.io's bot "pig" (colonizing-pig, ``Board::random``).
+#: * ``catanatron_spiral`` -- the same tokens along original Catanatron's spiral:
+#:   from the right corner (2, -2, 0), counter-clockwise. Boards drawn from a
+#:   seed before 2026-11-27 used it; kept to rebuild them.
+#: * ``random`` -- shuffled tokens, no two red numbers (6, 8) on adjacent tiles.
+NumberPlacement = Literal["official_spiral", "catanatron_spiral", "random"]
 
 
 @dataclass(frozen=True)
@@ -346,17 +356,21 @@ def initialize_tiles(
         else:
             raise ValueError("Invalid tile")
 
-    # If asked for numbers in official spiral, override the numbers.
-    if number_placement == "official_spiral":
+    # If asked for numbers in a spiral, override the numbers.
+    if number_placement in ("official_spiral", "catanatron_spiral"):
         if shuffled_numbers_param is not None:
             raise ValueError(
-                "official_spiral number placement does not support custom shuffled numbers"
+                f"{number_placement} number placement does not support custom shuffled numbers"
             )
 
-        # iterate in order of official spiral and assign numbers, skipping desert tile
-        start = (2, -2, 0) if map_template == BASE_MAP_TEMPLATE else (1, -1, 0)
+        # iterate in order of the spiral and assign numbers, skipping desert tile
+        if number_placement == "official_spiral" and map_template == BASE_MAP_TEMPLATE:
+            start, clockwise = (0, 2, -2), True  # top-left corner, as colonizing-pig
+        else:
+            start = (2, -2, 0) if map_template == BASE_MAP_TEMPLATE else (1, -1, 0)
+            clockwise = False
         i = 0
-        for coordinate in spiral_land_coordinates(all_tiles, start):
+        for coordinate in spiral_land_coordinates(all_tiles, start, clockwise):
             tile = all_tiles[coordinate]
             if not isinstance(tile, LandTile):
                 raise ValueError(

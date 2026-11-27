@@ -125,7 +125,7 @@ def test_after_the_game_every_state_shows_the_cards(client):
     bought_at = next(
         i
         for i, (action, _) in enumerate(state["action_records"])
-        if action[1] == "BUY_DEVELOPMENT_CARD"
+        if action[1] == "BUY_DEVELOPMENT_CARD" and action[0] == bot
     )
     for query in ("", f"?as={human}"):
         earlier = client.get(

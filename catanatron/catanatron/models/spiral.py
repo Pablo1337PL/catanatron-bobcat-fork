@@ -6,11 +6,12 @@ from catanatron.models.tiles import LandTile, Tile
 
 
 def spiral_land_coordinates(
-    all_tiles: Mapping[Coordinate, Tile], start: Coordinate
+    all_tiles: Mapping[Coordinate, Tile], start: Coordinate, clockwise: bool = False
 ) -> Generator[Coordinate, None, None]:
     """
     Yield land-tile coordinates in coast-following spiral order from an outer-edge
-    start coordinate toward the center.
+    start coordinate toward the center: counter-clockwise, or ``clockwise`` (as
+    seen on the board drawn with rows of decreasing ``z`` on top).
 
     Requirements:
     - ``start`` must be a land tile.
@@ -34,7 +35,8 @@ def spiral_land_coordinates(
         raise ValueError("start must be on the outer edge of the land mass")
 
     directions = list(Direction)
-    directions.reverse()
+    if not clockwise:
+        directions.reverse()
 
     direction = None
     for i, candidate in enumerate(directions):
